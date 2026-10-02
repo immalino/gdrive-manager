@@ -89,6 +89,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 1: `@types/node` dipaksa `^24` (peer requirement vitest 5); build script `esbuild` diizinkan lewat `allowBuilds` di `pnpm-workspace.yaml` (pnpm 12 memblokir build script secara default).
 - Sesi 1: `shadcn@latest` (init + add) memakai **`@base-ui/react`** sebagai primitif (bukan Radix) dan paket `cn` untuk `cn()`. Komponen UI berikutnya harus mengikuti API Base UI (mis. prop `render` alih-alih `asChild`).
 - Sesi 1: `pnpm format` sudah dijalankan sekali, sehingga file bawaan scaffold ikut ter-format ulang (gaya single-quote, printWidth 100) — jangan kembalikan ke double quote.
+- Sesi 1: `shadcn` ada di `dependencies` karena CLI `shadcn init` memang menambahkannya (ada perintah `shadcn eject` untuk melepasnya) — jangan dihapus. `clsx` + `tailwind-merge` dipasang sesuai checklist langkah 3 walau kini dipakai paket `cn`.
 ```
 
 ---
