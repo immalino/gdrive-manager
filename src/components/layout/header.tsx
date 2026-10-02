@@ -23,7 +23,7 @@ export function Header({ user }: HeaderProps) {
           <RefreshCw />
           Refresh
         </Button>
-        <Button disabled title="Fitur menyusul">
+        <Button render={<a href="/api/google/connect" />}>
           <Plus />
           Add Account
         </Button>
