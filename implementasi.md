@@ -67,7 +67,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 
 | Sesi | Fokus | Status | Tanggal | Catatan Handoff |
 | --- | --- | --- | --- | --- |
-| 1 | Foundation: Next.js, Docker Postgres, Drizzle schema, shell UI | ⬜ | | |
+| 1 | Foundation: Next.js, Docker Postgres, Drizzle schema, shell UI | ✅ | 2026-10-02 | Lint memakai `eslint` CLI (lihat Log Sesi). UserMenu di header masih slot kosong (diisi Sesi 2). `FileKind` tidak dibuat sesuai rencana (Sesi 5). Verifikasi browser dilakukan via curl terhadap HTML SSR + log `next dev` (environment tanpa browser headless). |
 | 2 | Auth aplikasi (Better Auth) + proteksi route | ⬜ | | |
 | 3 | Enkripsi token + Google OAuth connect/disconnect + API accounts | ⬜ | | |
 | 4 | GoogleDriveService (quota) + sinkronisasi quota + halaman Accounts | ⬜ | | |
@@ -84,7 +84,11 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 **Log Sesi** (diisi bila ada keputusan penting lintas sesi):
 
 ```text
-- (kosong)
+- Sesi 1: script `lint` = `eslint` CLI, bukan `next lint` — Next.js 16 menghapus `next lint` (lihat node_modules/next/dist/docs/.../03-eslint.md). DoD tetap `pnpm lint`.
+- Sesi 1: create-next-app (Next 16) tidak lagi menyalin Prettier; ditambahkan manual (`prettier` dev dep, `.prettierrc`, script `format` / `format:check`) agar §2.1 terpenuhi.
+- Sesi 1: `@types/node` dipaksa `^24` (peer requirement vitest 5); build script `esbuild` diizinkan lewat `allowBuilds` di `pnpm-workspace.yaml` (pnpm 12 memblokir build script secara default).
+- Sesi 1: `shadcn@latest` (init + add) memakai **`@base-ui/react`** sebagai primitif (bukan Radix) dan paket `cn` untuk `cn()`. Komponen UI berikutnya harus mengikuti API Base UI (mis. prop `render` alih-alih `asChild`).
+- Sesi 1: `pnpm format` sudah dijalankan sekali, sehingga file bawaan scaffold ikut ter-format ulang (gaya single-quote, printWidth 100) — jangan kembalikan ke double quote.
 ```
 
 ---
@@ -292,7 +296,7 @@ Urutan eksekusi dianjurkan: 1→2→3→4→5→6→7→8→9→10→11→12→1
 
 ### Langkah-langkah
 
-- [ ] **1. Init git + scaffold Next.js**
+- [x] **1. Init git + scaffold Next.js**
 
 ```bash
 cd /home/malino/projects/gdrive-drive
@@ -307,7 +311,7 @@ git commit -m "chore: scaffold next.js app"
 
 Pastikan `tsconfig.json` memakai `"strict": true` dan alias `@/*` → `./src/*`.
 
-- [ ] **2. `.env` + `.gitignore`**
+- [x] **2. `.env` + `.gitignore`**
 
 Tambahkan `.env*` (kecuali `.env.example`) ke `.gitignore`. Buat `.env.example` persis isi [§2.6](#26-environment-variables-envexample), lalu:
 
@@ -319,21 +323,21 @@ openssl rand -base64 32   # tempel ke BETTER_AUTH_SECRET
 
 Isi `BETTER_AUTH_URL`, `APP_URL`, `GOOGLE_REDIRECT_URI` dengan `http://localhost:3000/...`. `GOOGLE_CLIENT_ID/SECRET` dikosongkan (diisi Sesi 3).
 
-- [ ] **3. Install dependensi**
+- [x] **3. Install dependensi**
 
 ```bash
 pnpm add better-auth drizzle-orm postgres @tanstack/react-query @tanstack/react-table nanoid clsx tailwind-merge lucide-react
 pnpm add -D drizzle-kit vitest tsx dotenv
 ```
 
-- [ ] **4. shadcn/ui**
+- [x] **4. shadcn/ui**
 
 ```bash
 pnpm dlx shadcn@latest init -d
 pnpm dlx shadcn@latest add button card table dialog input label select badge progress tabs dropdown-menu sonner avatar skeleton sheet separator textarea radio-group alert
 ```
 
-- [ ] **5. Docker Compose Postgres**
+- [x] **5. Docker Compose Postgres**
 
 Buat `docker-compose.yml`:
 
@@ -361,7 +365,7 @@ volumes:
 
 `docker compose up -d` → pastikan status `healthy`.
 
-- [ ] **6. Vitest config**
+- [x] **6. Vitest config**
 
 Buat `vitest.config.ts`:
 
@@ -375,7 +379,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **7. Env helper**
+- [x] **7. Env helper**
 
 Buat `src/lib/env.ts`:
 
@@ -398,7 +402,7 @@ export const env = {
 };
 ```
 
-- [ ] **8. Format helper + test**
+- [x] **8. Format helper + test**
 
 Buat `src/lib/format.ts`:
 
@@ -440,7 +444,7 @@ describe('formatBytes', () => {
 
 `pnpm test` → PASS.
 
-- [ ] **9. Skema auth (Better Auth)**
+- [x] **9. Skema auth (Better Auth)**
 
 Buat `src/db/schema/auth.ts` (nama field **wajib** persis ekspektasi Better Auth):
 
@@ -496,7 +500,7 @@ export const verification = pgTable('verification', {
 
 > **Aturan konflik:** jika `npx auth@latest generate` menghasilkan schema Better Auth yang berbeda, **ikuti output CLI** — yang penting nama tabel/kolom sesuai versi Better Auth terpasang.
 
-- [ ] **10. Skema domain (PRD §8.3)**
+- [x] **10. Skema domain (PRD §8.3)**
 
 Buat `src/db/schema/google-accounts.ts`:
 
@@ -596,7 +600,7 @@ export * from './upload-jobs';
 export * from './activity-logs';
 ```
 
-- [ ] **11. Koneksi DB + drizzle-kit**
+- [x] **11. Koneksi DB + drizzle-kit**
 
 Buat `src/db/index.ts`:
 
@@ -626,7 +630,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **12. Generate + migrate**
+- [x] **12. Generate + migrate**
 
 ```bash
 pnpm db:generate
@@ -636,7 +640,7 @@ docker compose exec postgres psql -U gdrive -d gdrive_manager -c "\dt"
 
 Expected: `user, session, account, verification, google_accounts, storage_snapshots, upload_jobs, activity_logs`.
 
-- [ ] **13. Shared types + API client**
+- [x] **13. Shared types + API client**
 
 Buat `src/types/index.ts`:
 
@@ -688,7 +692,7 @@ export const api = {
 };
 ```
 
-- [ ] **14. Shell UI (PRD §11)**
+- [x] **14. Shell UI (PRD §11)**
 
 `src/components/layout/sidebar.tsx` (client): brand `☁ GDrive Manager`; menu `Dashboard /dashboard`, `Files /dashboard/files`, `Accounts /dashboard/accounts`, `Activity /dashboard/activity`, `Settings /dashboard/settings`; item aktif via `usePathname`; mobile = Sheet.
 
@@ -745,7 +749,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 </html>
 ```
 
-- [ ] **15. Pipeline + commit**
+- [x] **15. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -755,16 +759,16 @@ git commit -m "chore: foundation — db schema, shell dashboard, tooling"
 
 ### Verifikasi
 
-- [ ] `docker compose up -d` → postgres `healthy`
-- [ ] `pnpm db:migrate` tanpa error; `\dt` menampilkan 8 tabel
-- [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` semuanya lulus
-- [ ] `pnpm dev` → `http://localhost:3000` redirect ke `/dashboard`, tema gelap, sidebar 5 menu, console tanpa error
-- [ ] `.env` tidak terdaftar di git (`git status --ignored --porcelain | grep '.env$'` menunjukkan ignored)
+- [x] `docker compose up -d` → postgres `healthy`
+- [x] `pnpm db:migrate` tanpa error; `\dt` menampilkan 8 tabel
+- [x] `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` semuanya lulus
+- [x] `pnpm dev` → `http://localhost:3000` redirect ke `/dashboard`, tema gelap, sidebar 5 menu, console tanpa error
+- [x] `.env` tidak terdaftar di git (`git status --ignored --porcelain | grep '.env$'` menunjukkan ignored)
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 1
-- [ ] Update baris **Sesi 1** di tracker: ✅, tanggal, catatan
+- [x] Commit terakhir sesi 1
+- [x] Update baris **Sesi 1** di tracker: ✅, tanggal, catatan
 
 ---
 
