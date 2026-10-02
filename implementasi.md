@@ -69,7 +69,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | --- | --- | --- | --- | --- |
 | 1 | Foundation: Next.js, Docker Postgres, Drizzle schema, shell UI | ✅ | 2026-10-02 | Lint memakai `eslint` CLI (lihat Log Sesi). UserMenu di header masih slot kosong (diisi Sesi 2). `FileKind` tidak dibuat sesuai rencana (Sesi 5). Verifikasi browser dilakukan via curl terhadap HTML SSR + log `next dev` (environment tanpa browser headless). |
 | 2 | Auth aplikasi (Better Auth) + proteksi route | ✅ | 2026-10-02 | `withAuth`/`ok`/`errorResponse` sudah tersedia tapi belum dipakai route mana pun (mulai Sesi 3). `Header` kini mewajibkan prop `user` (diisi guard `dashboard/layout.tsx`). Verifikasi browser dilakukan via curl terhadap SSR HTML + API (environment tanpa browser headless). |
-| 3 | Enkripsi token + Google OAuth connect/disconnect + API accounts | 🟡 | 2026-10-02 | Kode selesai + commit `8f3d63e`; verifikasi tanpa-credential lulus (test enkripsi, UNAUTHORIZED, DELETE cascade, invalid_state, otorisasi lintas-user). **Tertunda:** langkah 1 — `GOOGLE_CLIENT_ID/SECRET` masih kosong (wizard: `bash /tmp/opencode/google-oauth-setup.sh`) — dan 3 verifikasi live OAuth (browser connect, DB token `v1.`, akun ke-2) yang juga prasyarat Sesi 4. `logActivity` dikomentari → aktifkan di Sesi 6. |
+| 3 | Enkripsi token + Google OAuth connect/disconnect + API accounts | ✅ | 2026-10-02 | Selesai; verifikasi lulus termasuk live OAuth (2 akun terhubung, token tersimpan `v1.`, status `connected`, cascade DELETE teruji). Scope `auth/drive` penuh. App Google masih **Testing** → hanya email *test user* yang boleh connect (lainnya 403 `access_denied`) dan refresh token kadaluarsa 7 hari — publish ke Production untuk pemakaian panjang. `logActivity` dikomentari → aktifkan di Sesi 6. Halaman `/dashboard/accounts` masih placeholder → tabel diisi Sesi 4. |
 | 4 | GoogleDriveService (quota) + sinkronisasi quota + halaman Accounts | ⬜ | | |
 | 5 | List/search file lintas akun + index cache `drive_files` + halaman Files | ⬜ | | |
 | 6 | Upload (manual, single-account), download, delete, folder, rate limit | ⬜ | | |
@@ -96,7 +96,8 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 3: `refreshTokenEncrypted` (notNull) + TS strict menolak snippet plan → callback dua jalur: refresh token ada → insert/upsert penuh; tidak ada → update baris existing, pertahankan token lama (redirect `?error=no_refresh_token` bila baris belum pernah ada).
 - Sesi 3: deviasi review — `DELETE /api/accounts/[id]` kini memfilter `id + user_id` (§2.5.3), callback dibungkus try/catch → `?error=exchange_failed`, dan cookie `g_oauth_state` dihapus di semua jalur gagal.
 - Sesi 3: tombol header memakai `render={<a href="/api/google/connect"/>}` (API Base UI), bukan `asChild` yang tidak ada di Button.
-- Sesi 3: setup kredensial via wizard `/tmp/opencode/google-oauth-setup.sh` (belum dijalankan); verifikasi live OAuth tertunda — environment tanpa browser.
+- Sesi 3: setup kredensial memakai wizard `/tmp/opencode/google-oauth-setup.sh` (sekali jalan; ulangi bila perlu credential baru).
+- Sesi 3 (live): app Google masih **Testing** → hanya *test user* di consent screen yang bisa connect; error 403 `access_denied` = email belum didaftarkan (Cloud Console → APIs & Services → OAuth consent screen → Test users). `next dev` perlu restart setelah `.env` berubah.
 ```
 
 ---
@@ -1036,7 +1037,7 @@ git add -A && git commit -m "feat: authentication with better-auth, session guar
 
 ### Langkah-langkah
 
-- [ ] **1. Kredensial Google (manual, sekali)**
+- [x] **1. Kredensial Google (manual, sekali)**
 
 1. https://console.cloud.google.com → pilih/buat project.
 2. **APIs & Services → Library** → aktifkan **Google Drive API**.
@@ -1362,9 +1363,9 @@ git add -A && git commit -m "feat: google oauth connect/disconnect with encrypte
 ### Verifikasi
 
 - [x] `pnpm test` → test enkripsi PASS
-- [ ] Browser (login): **+ Add Account** → pilih akun → kembali `/dashboard/accounts?connected=<id>`
-- [ ] DB: `select email, left(access_token,10), left(refresh_token_encrypted,10), status from google_accounts;` → access_token **diawali `v1.`** (bukan `ya29.`), status `connected`
-- [ ] Connect akun kedua → 2 baris
+- [x] Browser (login): **+ Add Account** → pilih akun → kembali `/dashboard/accounts?connected=<id>`
+- [x] DB: `select email, left(access_token,10), left(refresh_token_encrypted,10), status from google_accounts;` → access_token **diawali `v1.`** (bukan `ya29.`), status `connected`
+- [x] Connect akun kedua → 2 baris
 - [x] `curl -s -X DELETE http://localhost:3000/api/accounts/<id> -b /tmp/cookies.txt` → `{"deleted":true}`; baris + snapshot terhapus (cascade)
 - [x] Curl tanpa cookie → `{"error":{"code":"UNAUTHORIZED"...}}`
 
