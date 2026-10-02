@@ -68,7 +68,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | Sesi | Fokus | Status | Tanggal | Catatan Handoff |
 | --- | --- | --- | --- | --- |
 | 1 | Foundation: Next.js, Docker Postgres, Drizzle schema, shell UI | ✅ | 2026-10-02 | Lint memakai `eslint` CLI (lihat Log Sesi). UserMenu di header masih slot kosong (diisi Sesi 2). `FileKind` tidak dibuat sesuai rencana (Sesi 5). Verifikasi browser dilakukan via curl terhadap HTML SSR + log `next dev` (environment tanpa browser headless). |
-| 2 | Auth aplikasi (Better Auth) + proteksi route | ⬜ | | |
+| 2 | Auth aplikasi (Better Auth) + proteksi route | ✅ | 2026-10-02 | `withAuth`/`ok`/`errorResponse` sudah tersedia tapi belum dipakai route mana pun (mulai Sesi 3). `Header` kini mewajibkan prop `user` (diisi guard `dashboard/layout.tsx`). Verifikasi browser dilakukan via curl terhadap SSR HTML + API (environment tanpa browser headless). |
 | 3 | Enkripsi token + Google OAuth connect/disconnect + API accounts | ⬜ | | |
 | 4 | GoogleDriveService (quota) + sinkronisasi quota + halaman Accounts | ⬜ | | |
 | 5 | List/search file lintas akun + index cache `drive_files` + halaman Files | ⬜ | | |
@@ -90,6 +90,9 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 1: `shadcn@latest` (init + add) memakai **`@base-ui/react`** sebagai primitif (bukan Radix) dan paket `cn` untuk `cn()`. Komponen UI berikutnya harus mengikuti API Base UI (mis. prop `render` alih-alih `asChild`).
 - Sesi 1: `pnpm format` sudah dijalankan sekali, sehingga file bawaan scaffold ikut ter-format ulang (gaya single-quote, printWidth 100) — jangan kembalikan ke double quote.
 - Sesi 1: `shadcn` ada di `dependencies` karena CLI `shadcn init` memang menambahkannya (ada perintah `shadcn eject` untuk melepasnya) — jangan dihapus. `clsx` + `tailwind-merge` dipasang sesuai checklist langkah 3 walau kini dipakai paket `cn`.
+- Sesi 2: `toNextJsHandler(auth)` menerima instance auth langsung (better-auth 1.7); `drizzleAdapter(db, { provider: 'pg' })` tanpa opsi `schema` sudah cukup karena `db._.fullSchema` memuat export `user/session/account/verification`.
+- Sesi 2: sign-out via curl butuh `Content-Type: application/json` + header `Origin` (proteksi CSRF Better Auth); browser mengirim keduanya otomatis — verifikasi memakai `-H 'origin: http://localhost:3000'`.
+- Sesi 2: item `Settings` di UserMenu memakai `onClick` + `router.push` (bukan `render={<Link/>}`) agar tidak bergantung pada perilaku Base UI Menu yang belum teruji browser.
 ```
 
 ---
@@ -790,7 +793,7 @@ git commit -m "chore: foundation — db schema, shell dashboard, tooling"
 
 ### Langkah-langkah
 
-- [ ] **1. Better Auth instance**
+- [x] **1. Better Auth instance**
 
 Buat `src/lib/auth.ts`:
 
@@ -825,7 +828,7 @@ import { toNextJsHandler } from 'better-auth/next-js';
 export const { POST, GET } = toNextJsHandler(auth);
 ```
 
-- [ ] **2. Errors + session helper + HTTP helper**
+- [x] **2. Errors + session helper + HTTP helper**
 
 Buat `src/lib/errors.ts`:
 
@@ -906,7 +909,7 @@ export function withAuth<Ctx = unknown>(
 }
 ```
 
-- [ ] **3. Guard halaman dashboard**
+- [x] **3. Guard halaman dashboard**
 
 Perbarui `src/app/dashboard/layout.tsx` (bagian guard saja, shell tetap):
 
@@ -921,7 +924,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 }
 ```
 
-- [ ] **4. Halaman sign-up / sign-in**
+- [x] **4. Halaman sign-up / sign-in**
 
 Buat `src/app/(auth)/layout.tsx` (centered card, tema gelap), lalu `src/app/(auth)/sign-up/page.tsx` (client):
 
@@ -981,15 +984,15 @@ export default function SignUpPage() {
 
 Buat `sign-in/page.tsx` serupa dengan `authClient.signIn.email({ email, password })` → `router.push('/dashboard')`, tampilkan `error.message`.
 
-- [ ] **5. UserMenu di header**
+- [x] **5. UserMenu di header**
 
 `src/components/layout/user-menu.tsx` (client): DropdownMenu berisi nama + email, tombol **Sign out** → `await authClient.signOut()` → `router.push('/sign-in')` + `router.refresh()`. Ganti slot user di `Header`.
 
-- [ ] **6. Settings page**
+- [x] **6. Settings page**
 
 `src/app/dashboard/settings/page.tsx` (server): `getUser()` lalu tampilkan Name / Email / User ID + daftar env var yang perlu diisi (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY`).
 
-- [ ] **7. Pipeline + commit**
+- [x] **7. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -998,17 +1001,17 @@ git add -A && git commit -m "feat: authentication with better-auth, session guar
 
 ### Verifikasi
 
-- [ ] `curl -s -X POST http://localhost:3000/api/auth/sign-up/email -H 'content-type: application/json' -d '{"name":"Tes","email":"tes1@example.com","password":"password123"}' -c /tmp/cookies.txt` → 200 + body berisi user
-- [ ] `curl -s http://localhost:3000/api/auth/get-session -b /tmp/cookies.txt` → user `tes1@example.com`
-- [ ] Browser: buka `/dashboard` tanpa login → redirect `/sign-in`
-- [ ] Browser: daftar → masuk `/dashboard`, header menampilkan nama; refresh tetap login
-- [ ] Sign out → redirect `/sign-in`, akses `/dashboard` redirect lagi
-- [ ] `docker compose exec postgres psql -U gdrive -d gdrive_manager -c 'select email from "user"'` → ada 1 baris
+- [x] `curl -s -X POST http://localhost:3000/api/auth/sign-up/email -H 'content-type: application/json' -d '{"name":"Tes","email":"tes1@example.com","password":"password123"}' -c /tmp/cookies.txt` → 200 + body berisi user
+- [x] `curl -s http://localhost:3000/api/auth/get-session -b /tmp/cookies.txt` → user `tes1@example.com`
+- [x] Browser: buka `/dashboard` tanpa login → redirect `/sign-in`
+- [x] Browser: daftar → masuk `/dashboard`, header menampilkan nama; refresh tetap login
+- [x] Sign out → redirect `/sign-in`, akses `/dashboard` redirect lagi
+- [x] `docker compose exec postgres psql -U gdrive -d gdrive_manager -c 'select email from "user"'` → ada 1 baris
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 2
-- [ ] Update baris **Sesi 2** di tracker: ✅, tanggal, catatan
+- [x] Commit terakhir sesi 2
+- [x] Update baris **Sesi 2** di tracker: ✅, tanggal, catatan
 
 ---
 
