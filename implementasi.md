@@ -71,7 +71,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 2 | Auth aplikasi (Better Auth) + proteksi route | ✅ | 2026-10-02 | `withAuth`/`ok`/`errorResponse` sudah tersedia tapi belum dipakai route mana pun (mulai Sesi 3). `Header` kini mewajibkan prop `user` (diisi guard `dashboard/layout.tsx`). Verifikasi browser dilakukan via curl terhadap SSR HTML + API (environment tanpa browser headless). |
 | 3 | Enkripsi token + Google OAuth connect/disconnect + API accounts | ✅ | 2026-10-02 | Selesai; verifikasi lulus termasuk live OAuth (2 akun terhubung, token tersimpan `v1.`, status `connected`, cascade DELETE teruji). Scope `auth/drive` penuh. App Google masih **Testing** → hanya email *test user* yang boleh connect (lainnya 403 `access_denied`) dan refresh token kadaluarsa 7 hari — publish ke Production untuk pemakaian panjang. `logActivity` dikomentari → aktifkan di Sesi 6. Halaman `/dashboard/accounts` masih placeholder → tabel diisi Sesi 4. |
 | 4 | GoogleDriveService (quota) + sinkronisasi quota + halaman Accounts | ✅ | 2026-10-03 | Pipeline lulus + 11 unit test baru (fetch-mocked quota & `mapGoogleError`). Live curl: `POST /api/accounts/refresh` sukses 2 akun (snapshot `0→2→4`; token kedaluwarsa → auto-refresh lewat `getValidAccessToken`), struktur `/api/storage` benar, riwayat `/api/accounts/[id]/storage` OK, disconnect cascade OK, tanpa cookie 401, tidak ada token di log dev. Tanpa browser headless: toast `?connected=` + render tabel setelah hydration tak diverifikasi visual (SSR menampilkan skeleton; data dari API teruji). Password `tes1@example.com` direset ke `Sesi4Verify!` demi verifikasi curl. `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
-| 5 | List/search file lintas akun + index cache `drive_files` + halaman Files | ⬜ | | |
+| 5 | List/search file lintas akun + index cache `drive_files` + halaman Files | ✅ | 2026-10-03 | 100 file per akun (`nextPageToken` tidak dipakai); tombol Download masih disabled sampai Sesi 6. Verifikasi via curl: 2 akun × 100 file, search/filter/sort OK, quote search tidak error, `drive_files` terisi lintas akun, simulasi token rusak → `failedAccounts` + file akun lain tetap tampil (token dipulihkan, status `connected`). Tanpa browser headless: render tabel/label Select tak diverifikasi visual (SSR menampilkan skeleton + header kolom; data teruji lewat API). `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 6 | Upload (manual, single-account), download, delete, folder, rate limit | ⬜ | | |
 | 7 | Dashboard storage + recent files/activity + global search | ⬜ | | |
 | 8 | Error handling, health status, keamanan, responsive, acceptance MVP | ⬜ | | |
@@ -104,6 +104,12 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 4: `DriveFileDto` tidak diimpor di `service.ts` (lint warning unused) — dipakai kembali mulai Sesi 5. `pnpm format:check` gagal pada `encryption.ts`, `__tests__/encryption.test.ts`, `api/accounts/[id]/route.ts` (terlewat `pnpm format` sesi lalu) — sengaja tak disentuh agar diff sesi 4 fokus; rapikan di Sesi 8.
 - Sesi 4 (live): verifikasi curl memakai sign-in Better Auth dengan password `tes1@example.com` = `Sesi4Verify!` (hash di-set via `better-auth/crypto`), cookie di `/tmp/cookies.txt`; `storage_snapshots.id` tidak punya default DB → insert SQL manual wajib menyetel `id`.
 - Sesi 4 (review): dua temuan dibereskan sebelum tutup sesi — tipe mati `StorageSnapshotsResponse` dihapus, dan riwayat snapshot kini lewat `recentSnapshots()` di `quota.ts` (modul pembaca snapshot) alih-alih query duplikat di route.
+- Sesi 5: TanStack Table **v9** memakai `useTable({ features, columns, data })` + `tableFeatures({})` + `createColumnHelper<typeof features, T>()` + `<table.FlexRender cell={cell} />` — API v8 (`useReactTable`, `getCoreRowModel`) tidak ada lagi; lihat `node_modules/@tanstack/react-table/skills/getting-started/SKILL.md`.
+- Sesi 5: filter Files disimpan sebagai state `FilesTable` (diinisialisasi dari `searchParams` halaman), URL disinkronkan shallow lewat `window.history.replaceState` (tanpa round-trip RSC) sehingga komponen tidak memakai `useSearchParams` dan tidak butuh Suspense.
+- Sesi 5 (review): `sortFiles` wajib unit test (Produces sesi); `KIND_SQL.document` disamakan dengan `classifyMime` (tambah `word`/`sheet`/`presentation`) dan mengecualikan folder; opsi **Folders** ditambahkan ke filter Kind agar `?kind=folder` (diterima API, difilter server setelah fetch) punya label.
+- Sesi 5: `kind`/`sort` tidak valid → `400 VALIDATION`; `accountId` kosong dinormalisasi `'all'` (select default "All Accounts"). `kind` selain `other`/`folder` difilter oleh query Drive; `other`/`folder` difilter di server setelah fetch.
+- Sesi 5 (live): verifikasi curl memakai akun `tes1@example.com` / `Sesi4Verify!` (dipakai Sesi 4). Simulasi 1 akun rusak = `access_token` + `refresh_token_encrypted` diset `v1.tes` (token lama di-backup dulu) → `failedAccounts` berisi email akun itu, file akun lain tetap tampil; token dipulihkan dan status kembali `connected`.
+- Sesi 5: route `GET /api/files/[id]/download` sudah ada tapi `downloadFile` masih stub Sesi 6 → 500 bila dipanggil (400 tanpa `accountId`, 404 akun bukan milik user, 401 tanpa sesi); tombol Download di UI disabled + `title` "Sesi 6".
 ```
 
 ---
@@ -1739,7 +1745,7 @@ git add -A && git commit -m "feat: drive service quota sync and accounts managem
 
 ### Langkah-langkah
 
-- [ ] **1. Test query builder & klasifikasi MIME (merah)**
+- [x] **1. Test query builder & klasifikasi MIME (merah)**
 
 Buat `src/lib/__tests__/query.test.ts`:
 
@@ -1785,7 +1791,7 @@ describe('classifyMime', () => {
 
 `pnpm test` → **FAIL**.
 
-- [ ] **2. Schema `drive_files` + migrasi**
+- [x] **2. Schema `drive_files` + migrasi**
 
 Buat `src/db/schema/drive-files.ts`:
 
@@ -1815,7 +1821,7 @@ export type DriveFileRecord = typeof driveFiles.$inferSelect;
 
 Tambahkan `export * from './drive-files';` ke `src/db/schema/index.ts`, lalu `pnpm db:generate && pnpm db:migrate`.
 
-- [ ] **3. Klasifikasi + query builder + sort**
+- [x] **3. Klasifikasi + query builder + sort**
 
 Buat `src/lib/files/mime.ts`:
 
@@ -1892,7 +1898,7 @@ export function sortFiles(files: DriveFileDto[], key: SortKey, dir: 'asc' | 'des
 
 > `kind: 'other'` dan `'folder'` tidak bisa diekspresikan andal dalam satu query Drive → difilter di server setelah fetch (lihat langkah 5).
 
-- [ ] **4. `listFiles` di service**
+- [x] **4. `listFiles` di service**
 
 Realisasikan stub `listFiles` di `src/lib/google-drive/service.ts` (ganti signature stub dengan opsional parameter):
 
@@ -1933,7 +1939,7 @@ async listFiles(options: ListOptions = {}): Promise<{ files: DriveFileDto[]; nex
 }
 ```
 
-- [ ] **5. API `GET /api/files`**
+- [x] **5. API `GET /api/files`**
 
 Buat `src/app/api/files/route.ts`:
 
@@ -2017,7 +2023,7 @@ export const GET = withAuth(async (user, req) => {
 });
 ```
 
-- [ ] **6. Endpoint download (versi dasar)**
+- [x] **6. Endpoint download (versi dasar)**
 
 Buat `src/app/api/files/[id]/download/route.ts`:
 
@@ -2042,7 +2048,7 @@ export const GET = withAuth<Ctx>(async (user, req, ctx) => {
 
 Catatan: `downloadFile` masih stub sampai Sesi 6 — tombol Download di UI bisa diklik tapi akan 500; **nonaktifkan dulu tombol Download** di Sesi 5 (tombol disabled + tooltip "Sesi 6"), aktifkan kembali di Sesi 6.
 
-- [ ] **7. Halaman Files + FilesTable**
+- [x] **7. Halaman Files + FilesTable**
 
 `src/components/files/files-table.tsx` (client):
 
@@ -2054,7 +2060,7 @@ Catatan: `downloadFile` masih stub sampai Sesi 6 — tombol Download di UI bisa 
 
 `src/app/dashboard/files/page.tsx` → server component render `<FilesTable />`, baca `searchParams` awal (search/kind/accountId) agar link global search (Sesi 7) langsung terisi.
 
-- [ ] **8. Pipeline + commit**
+- [x] **8. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -2063,19 +2069,19 @@ git add -A && git commit -m "feat: cross-account file listing, search, filters a
 
 ### Verifikasi
 
-- [ ] `pnpm test` → test query/mime PASS
-- [ ] Halaman Files memuat file dari **≥2 akun** (kolom Account berbeda)
-- [ ] Search kata yang ada di Drive → hanya nama cocok; search dengan karakter `'` tidak error
-- [ ] Filter Account → hanya akun itu; Filter Kind = Images → hanya gambar
-- [ ] Sort Updated asc/desc → urutan berubah
-- [ ] **Open in Drive** membuka tab Google Drive yang benar
-- [ ] `docker compose exec postgres psql -U gdrive -d gdrive_manager -c "select count(*), count(distinct google_account_id) from drive_files"` → terisi
-- [ ] Simulasi 1 akun rusak (ubah `access_token` jadi `v1.tes`) → file akun lain tetap tampil + alert `failedAccounts`
+- [x] `pnpm test` → test query/mime PASS
+- [x] Halaman Files memuat file dari **≥2 akun** (kolom Account berbeda)
+- [x] Search kata yang ada di Drive → hanya nama cocok; search dengan karakter `'` tidak error
+- [x] Filter Account → hanya akun itu; Filter Kind = Images → hanya gambar
+- [x] Sort Updated asc/desc → urutan berubah
+- [x] **Open in Drive** membuka tab Google Drive yang benar
+- [x] `docker compose exec postgres psql -U gdrive -d gdrive_manager -c "select count(*), count(distinct google_account_id) from drive_files"` → terisi
+- [x] Simulasi 1 akun rusak (ubah `access_token` jadi `v1.tes`) → file akun lain tetap tampil + alert `failedAccounts`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 5
-- [ ] Update baris **Sesi 5** di tracker: ✅, tanggal, catatan (mis. "100 file per akun; tombol Download masih disabled sampai Sesi 6")
+- [x] Commit terakhir sesi 5
+- [x] Update baris **Sesi 5** di tracker: ✅, tanggal, catatan (mis. "100 file per akun; tombol Download masih disabled sampai Sesi 6")
 
 ---
 
