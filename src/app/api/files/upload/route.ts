@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { uploadJobs } from '@/db/schema';
@@ -7,8 +7,8 @@ import { AppError } from '@/lib/errors';
 import { getAccountForUser } from '@/lib/google/tokens';
 import { GoogleDriveService } from '@/lib/google-drive/service';
 import { withAuth } from '@/lib/http';
-import { rateLimit } from '@/lib/rate-limit';
 import { syncQuota } from '@/lib/quota';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const POST = withAuth(async (user, req) => {
   const limit = rateLimit(`upload:${user.id}`, 10, 60_000);
@@ -58,7 +58,7 @@ export const POST = withAuth(async (user, req) => {
     await db
       .update(uploadJobs)
       .set({ status: 'completed', completedAt: new Date() })
-      .where(eq(uploadJobs.id, job!.id));
+      .where(and(eq(uploadJobs.id, job!.id), eq(uploadJobs.userId, user.id)));
     await syncQuota(account);
     await logActivity({
       userId: user.id,
@@ -73,7 +73,7 @@ export const POST = withAuth(async (user, req) => {
     await db
       .update(uploadJobs)
       .set({ status: 'failed', errorMessage: error instanceof Error ? error.message : 'unknown' })
-      .where(eq(uploadJobs.id, job!.id));
+      .where(and(eq(uploadJobs.id, job!.id), eq(uploadJobs.userId, user.id)));
     throw error instanceof AppError ? error : new AppError('UPLOAD_FAILED', 'Upload gagal.', 502);
   }
 });

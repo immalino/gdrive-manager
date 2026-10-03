@@ -87,9 +87,10 @@ interface UploadDialogProps {
 
 export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const queryClient = useQueryClient();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [error, setError] = useState<UploadError | null>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -97,6 +98,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const { data } = useQuery({
     queryKey: ['storage'],
     queryFn: () => api.get<StorageResponse>('/api/storage'),
+    enabled: open,
   });
   const accounts = useMemo(() => data?.accounts ?? [], [data]);
   const connected = useMemo(() => accounts.filter((a) => a.status === 'connected'), [accounts]);
@@ -104,19 +106,25 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const activeAccountId = storedValid ? accountId : (connected[0]?.id ?? null);
   const selectedAccount = accounts.find((a) => a.id === activeAccountId) ?? null;
 
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  const tooLarge = files.find(
+    (f) => selectedAccount?.freeBytes != null && f.size > selectedAccount.freeBytes,
+  );
   const quotaError =
-    file && selectedAccount?.freeBytes != null && file.size > selectedAccount.freeBytes
-      ? `Ukuran file (${formatBytes(file.size)}) melebihi sisa ruang ${selectedAccount.email} (${formatBytes(selectedAccount.freeBytes)}).`
+    tooLarge && selectedAccount
+      ? `File ${tooLarge.name} (${formatBytes(tooLarge.size)}) melebihi sisa ruang ${selectedAccount.email} (${formatBytes(selectedAccount.freeBytes)}).`
       : null;
 
   const isUploading = progress !== null;
-  const canUpload = Boolean(file && selectedAccount && !quotaError && !isUploading);
+  const canUpload = Boolean(files.length > 0 && selectedAccount && !quotaError && !isUploading);
+  const currentFile = currentIndex != null ? (files[currentIndex] ?? null) : null;
 
   function reset() {
     xhrRef.current?.abort();
     xhrRef.current = null;
-    setFile(null);
+    setFiles([]);
     setProgress(null);
+    setCurrentIndex(null);
     setError(null);
     if (inputRef.current) inputRef.current.value = '';
   }
@@ -127,32 +135,43 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   }
 
   async function handleUpload() {
-    if (!file || !selectedAccount || quotaError || isUploading) return;
+    if (files.length === 0 || !selectedAccount || quotaError || isUploading) return;
     setError(null);
-    setProgress(0);
-    const url = `/api/files/upload?accountId=${encodeURIComponent(selectedAccount.id)}&filename=${encodeURIComponent(file.name)}`;
-    const { promise, xhr } = startUpload(url, file, setProgress);
-    xhrRef.current = xhr;
-    try {
-      await promise;
-      toast.success(`File ${file.name} diupload ke ${selectedAccount.email}.`);
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-      queryClient.invalidateQueries({ queryKey: ['storage'] });
-      handleOpenChange(false);
-    } catch (err) {
-      const uploadError =
-        err instanceof UploadError
-          ? err
-          : new UploadError('UPLOAD_FAILED', err instanceof Error ? err.message : 'Upload gagal.');
-      if (uploadError.code === 'ABORTED') {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]!;
+      setCurrentIndex(i);
+      setProgress(0);
+      const url = `/api/files/upload?accountId=${encodeURIComponent(selectedAccount.id)}&filename=${encodeURIComponent(file.name)}`;
+      const { promise, xhr } = startUpload(url, file, setProgress);
+      xhrRef.current = xhr;
+      try {
+        await promise;
+      } catch (err) {
+        const uploadError =
+          err instanceof UploadError
+            ? err
+            : new UploadError(
+                'UPLOAD_FAILED',
+                err instanceof Error ? err.message : 'Upload gagal.',
+              );
         setProgress(null);
-      } else {
-        setProgress(null);
-        setError(uploadError);
+        setCurrentIndex(null);
+        // File yang sudah terkirim keluar dari daftar; sisa file bisa diulang.
+        setFiles(files.slice(i + 1));
+        if (uploadError.code !== 'ABORTED') setError(uploadError);
+        return;
+      } finally {
+        xhrRef.current = null;
       }
-    } finally {
-      xhrRef.current = null;
     }
+    const message =
+      files.length === 1
+        ? `File ${files[0]!.name} diupload ke ${selectedAccount.email}.`
+        : `${files.length} file diupload ke ${selectedAccount.email}.`;
+    toast.success(message);
+    queryClient.invalidateQueries({ queryKey: ['files'] });
+    queryClient.invalidateQueries({ queryKey: ['storage'] });
+    handleOpenChange(false);
   }
 
   return (
@@ -161,7 +180,8 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
         <DialogHeader>
           <DialogTitle>Upload file</DialogTitle>
           <DialogDescription>
-            Pilih file dan akun tujuan. Upload berjalan satu file per request (Mode A — manual).
+            Pilih file dan akun tujuan (Mode A — manual). Banyak file dikirim berurutan, satu
+            request per file.
           </DialogDescription>
         </DialogHeader>
 
@@ -171,10 +191,11 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
               ref={inputRef}
               id="upload-file-input"
               type="file"
+              multiple
               className="sr-only"
               disabled={isUploading}
               onChange={(e) => {
-                setFile(e.target.files?.[0] ?? null);
+                setFiles(Array.from(e.target.files ?? []));
                 setError(null);
                 setProgress(null);
               }}
@@ -183,10 +204,14 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
               htmlFor="upload-file-input"
               className="block cursor-pointer text-sm font-medium hover:text-foreground"
             >
-              {file ? file.name : 'Klik untuk memilih file'}
+              {files.length === 0
+                ? 'Klik untuk memilih file'
+                : files.length === 1
+                  ? files[0]!.name
+                  : `${files.length} file terpilih`}
             </label>
             <p className="mt-1 text-xs text-muted-foreground">
-              {file ? formatBytes(file.size) : 'Maksimal 1 file per request'}
+              {files.length > 0 ? `${formatBytes(totalSize)} total` : 'Satu request per file'}
             </p>
           </div>
 
@@ -206,10 +231,10 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
                   const disabled = account.status !== 'connected';
                   const active = activeAccountId === account.id;
                   const insufficient =
-                    file != null && account.freeBytes != null && file.size > account.freeBytes;
+                    files.length > 0 && account.freeBytes != null && totalSize > account.freeBytes;
                   const remaining =
-                    file != null && account.freeBytes != null
-                      ? Math.max(account.freeBytes - file.size, 0)
+                    files.length > 0 && account.freeBytes != null
+                      ? Math.max(account.freeBytes - totalSize, 0)
                       : account.freeBytes;
                   return (
                     <label
@@ -225,7 +250,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
                         <span className="block truncate text-sm font-medium">{account.email}</span>
                         <span className="block text-xs text-muted-foreground">
                           Free {formatBytes(account.freeBytes)}
-                          {file ? ` → sisa ${formatBytes(remaining)}` : ''}
+                          {files.length > 0 ? ` → sisa ${formatBytes(remaining)}` : ''}
                         </span>
                       </span>
                       {insufficient && (
@@ -256,12 +281,22 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
 
           {isUploading && (
             <div className="space-y-2">
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Mengupload ke {selectedAccount?.email}</span>
-                <span>{progress}%</span>
+              <div className="flex justify-between gap-3 text-xs text-muted-foreground">
+                <span className="truncate">
+                  Mengupload file {currentIndex != null ? currentIndex + 1 : 1}/{files.length} —{' '}
+                  {currentFile?.name} ke {selectedAccount?.email}
+                </span>
+                <span className="shrink-0">{progress}%</span>
               </div>
               <Progress value={progress} />
             </div>
+          )}
+
+          {!isUploading && files.length > 10 && (
+            <p className="text-xs text-muted-foreground">
+              Batas 10 upload/menit. Jika terkena batas, file yang tersisa bisa dikirim ulang lewat
+              tombol Upload setelah jeda 1 menit.
+            </p>
           )}
         </div>
 
