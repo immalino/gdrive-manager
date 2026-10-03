@@ -16,8 +16,7 @@ export function StorageOverview({ totals, isLoading }: StorageOverviewProps) {
   const cards = [
     {
       label: 'Total Storage',
-      value:
-        totals?.totalBytes == null ? 'Tidak terbatas' : formatBytes(totals.totalBytes),
+      value: totals?.totalBytes == null ? 'Tidak terbatas' : formatBytes(totals.totalBytes),
     },
     {
       label: 'Used',
@@ -38,9 +37,7 @@ export function StorageOverview({ totals, isLoading }: StorageOverviewProps) {
       {cards.map((c) => (
         <Card key={c.label}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              {c.label}
-            </CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{c.label}</CardTitle>
           </CardHeader>
           <CardContent className="text-2xl font-semibold">
             {isLoading ? <Skeleton className="h-8 w-28" /> : c.value}

@@ -19,7 +19,7 @@ export const GET = withAuth(async (user, req) => {
   const search = recent ? undefined : (sp.get('search') ?? undefined);
   const kindParam = recent ? undefined : sp.get('kind');
   const sortParam = recent ? 'modified' : sp.get('sort');
-  const dir = recent ? 'desc' : (sp.get('dir') === 'asc' ? 'asc' : 'desc');
+  const dir = recent ? 'desc' : sp.get('dir') === 'asc' ? 'asc' : 'desc';
 
   const ALLOWED_KINDS: string[] = [...FILE_KINDS, 'folder'];
   if (!recent && kindParam && kindParam !== 'all' && !ALLOWED_KINDS.includes(kindParam)) {

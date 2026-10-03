@@ -81,7 +81,7 @@ export function MobileNav() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
-        className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }))}
+        className={cn(buttonVariants({ variant: 'ghost', size: 'icon' }), 'md:hidden')}
         aria-label="Buka menu navigasi"
       >
         <Menu className="size-4" />

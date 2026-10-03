@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { api } from '@/lib/api-client';
+import { api, ApiError } from '@/lib/api-client';
 import { classifyMime, type FileKind } from '@/lib/files/mime';
 import type { SortKey } from '@/lib/files/merge';
 import { formatBytes, formatDateTime } from '@/lib/format';
@@ -100,7 +100,7 @@ function buildFilesParams(filters: FilesInitialFilters, includeDefaults = false)
 
 export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
   const searchParams = useSearchParams();
-  const urlSearch = searchParams.get("search") ?? "";
+  const urlSearch = searchParams.get('search') ?? '';
   const lastUrlSearchRef = useRef(urlSearch);
   const [searchInput, setSearchInput] = useState(initial.search);
   const [search, setSearch] = useState(initial.search);
@@ -192,7 +192,11 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
           <AlertCircle />
           <AlertTitle>Gagal memuat file</AlertTitle>
           <AlertDescription>
-            {error instanceof Error ? error.message : 'Kesalahan tidak diketahui.'}
+            {error instanceof ApiError
+              ? `[${error.code}] ${error.message}`
+              : error instanceof Error
+                ? error.message
+                : 'Kesalahan tidak diketahui.'}
           </AlertDescription>
         </Alert>
       )}

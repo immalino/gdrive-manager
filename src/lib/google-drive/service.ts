@@ -30,7 +30,7 @@ export class GoogleDriveService {
       ...init,
       headers: { Authorization: `Bearer ${this.accessToken}`, ...init.headers },
     });
-    if (!res.ok) throw mapGoogleError(res, this.account);
+    if (!res.ok) throw await mapGoogleError(res, this.account);
     return res;
   }
 
@@ -107,7 +107,7 @@ export class GoogleDriveService {
         body: JSON.stringify(metadata),
       },
     );
-    if (!init.ok) throw mapGoogleError(init, this.account);
+    if (!init.ok) throw await mapGoogleError(init, this.account);
     const sessionUrl = init.headers.get('location');
     if (!sessionUrl) throw new AppError('UPLOAD_FAILED', 'Gagal memulai sesi upload.', 502);
 
@@ -120,7 +120,7 @@ export class GoogleDriveService {
       body: params.stream,
       duplex: 'half',
     } as RequestInit & { duplex: 'half' });
-    if (!put.ok) throw mapGoogleError(put, this.account);
+    if (!put.ok) throw await mapGoogleError(put, this.account);
     const body = (await put.json()) as {
       id: string;
       name: string;
@@ -159,7 +159,7 @@ export class GoogleDriveService {
           headers: { Authorization: `Bearer ${this.accessToken}` },
         },
       );
-      if (!res.ok) throw mapGoogleError(res, this.account);
+      if (!res.ok) throw await mapGoogleError(res, this.account);
       return new Response(res.body, {
         status: 200,
         headers: {
@@ -172,7 +172,7 @@ export class GoogleDriveService {
     const res = await fetch(`${API_BASE}/files/${fileId}?alt=media`, {
       headers: { Authorization: `Bearer ${this.accessToken}` },
     });
-    if (!res.ok) throw mapGoogleError(res, this.account);
+    if (!res.ok) throw await mapGoogleError(res, this.account);
     const headers: Record<string, string> = {
       'content-type': res.headers.get('content-type') ?? 'application/octet-stream',
       'content-disposition': `attachment; filename="${encodeURIComponent(file.name)}"`,
@@ -188,7 +188,7 @@ export class GoogleDriveService {
 
   async deleteFile(fileId: string): Promise<void> {
     const res = await this.request(`/files/${fileId}`, { method: 'DELETE' });
-    if (res.status !== 204 && !res.ok) throw mapGoogleError(res, this.account);
+    if (res.status !== 204 && !res.ok) throw await mapGoogleError(res, this.account);
   }
 
   async createFolder(name: string, parentId?: string): Promise<DriveFileDto> {

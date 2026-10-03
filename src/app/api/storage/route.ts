@@ -30,7 +30,8 @@ export const GET = withAuth(async (user) => {
       totalBytes: snapshot?.totalBytes ?? null,
       usedBytes: snapshot?.usedBytes ?? 0,
       freeBytes: snapshot?.freeBytes ?? null,
-      snapshotAt: snapshot?.createdAt ?? null,
+      snapshotAt: snapshot?.createdAt ? new Date(snapshot.createdAt).toISOString() : null,
+      updatedAt: account.updatedAt ? new Date(account.updatedAt).toISOString() : null,
     })),
   });
 });

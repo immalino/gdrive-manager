@@ -22,6 +22,7 @@ export interface StorageAccountItem {
   usedBytes: number;
   freeBytes: number | null;
   snapshotAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface StorageResponse {

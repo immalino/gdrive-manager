@@ -118,15 +118,34 @@ describe('mapGoogleError', () => {
     [401, 'TOKEN_EXPIRED', 401],
     [403, 'PERMISSION_DENIED', 403],
     [404, 'NOT_FOUND', 404],
+    [410, 'NOT_FOUND', 404],
     [429, 'RATE_LIMITED', 429],
     [500, 'GOOGLE_UNAVAILABLE', 502],
     [503, 'GOOGLE_UNAVAILABLE', 502],
   ];
 
-  it.each(cases)('status %i → %s (%i)', (status, code, httpStatus) => {
-    const error = mapGoogleError(new Response('{}', { status }), account);
+  it.each(cases)('status %i → %s (%i)', async (status, code, httpStatus) => {
+    const error = await mapGoogleError(new Response('{}', { status }), account);
     expect(error).toBeInstanceOf(AppError);
     expect(error.code).toBe(code);
     expect(error.status).toBe(httpStatus);
+  });
+
+  it('status 403 dengan reason userRateLimit → RATE_LIMITED 429', async () => {
+    const body = JSON.stringify({
+      error: { errors: [{ reason: 'userRateLimitExceeded' }] },
+    });
+    const error = await mapGoogleError(new Response(body, { status: 403 }), account);
+    expect(error.code).toBe('RATE_LIMITED');
+    expect(error.status).toBe(429);
+  });
+
+  it('body bukan JSON → fallback tidak error', async () => {
+    const error = await mapGoogleError(
+      new Response('Internal Error HTML', { status: 502 }),
+      account,
+    );
+    expect(error.code).toBe('GOOGLE_UNAVAILABLE');
+    expect(error.status).toBe(502);
   });
 });

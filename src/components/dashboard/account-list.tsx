@@ -17,8 +17,8 @@ const STATUS_LABEL: Record<AccountStatus, string> = {
   error: 'Error',
 };
 
-const STATUS_VARIANT: Record<AccountStatus, 'default' | 'outline' | 'destructive'> = {
-  connected: 'default',
+const STATUS_VARIANT: Record<AccountStatus, 'secondary' | 'outline' | 'destructive'> = {
+  connected: 'secondary',
   reconnect_required: 'outline',
   error: 'destructive',
 };
@@ -89,14 +89,10 @@ export function AccountList({ accounts = [], isLoading }: AccountListProps) {
                     <div className="flex min-w-0 items-center gap-2.5">
                       <Avatar size="sm">
                         {account.picture && <AvatarImage src={account.picture} alt="" />}
-                        <AvatarFallback>
-                          {account.email.slice(0, 1).toUpperCase()}
-                        </AvatarFallback>
+                        <AvatarFallback>{account.email.slice(0, 1).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium leading-none">
-                          {account.email}
-                        </p>
+                        <p className="truncate text-sm font-medium leading-none">{account.email}</p>
                         {account.name && (
                           <p className="truncate text-xs text-muted-foreground mt-0.5">
                             {account.name}
@@ -104,9 +100,28 @@ export function AccountList({ accounts = [], isLoading }: AccountListProps) {
                         )}
                       </div>
                     </div>
-                    <Badge variant={STATUS_VARIANT[account.status]} className="shrink-0">
-                      {STATUS_LABEL[account.status]}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {account.status !== 'connected' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs text-amber-500 hover:text-amber-400"
+                          render={<a href="/api/google/connect" />}
+                        >
+                          Reconnect
+                        </Button>
+                      )}
+                      <Badge
+                        variant={STATUS_VARIANT[account.status]}
+                        className={
+                          account.status === 'reconnect_required'
+                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-500 dark:border-amber-400/40 dark:text-amber-400'
+                            : undefined
+                        }
+                      >
+                        {STATUS_LABEL[account.status]}
+                      </Badge>
+                    </div>
                   </div>
 
                   <Progress value={pct ?? 0} className="w-full" />
@@ -116,9 +131,7 @@ export function AccountList({ accounts = [], isLoading }: AccountListProps) {
                       {formatBytes(account.usedBytes)} /{' '}
                       {account.totalBytes == null ? '—' : formatBytes(account.totalBytes)}
                     </span>
-                    <span>
-                      {pct !== null ? `${pct}%` : 'Tanpa batas'}
-                    </span>
+                    <span>{pct !== null ? `${pct}%` : 'Tanpa batas'}</span>
                   </div>
                 </div>
               );

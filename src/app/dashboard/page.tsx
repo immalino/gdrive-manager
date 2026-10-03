@@ -8,8 +8,14 @@ import { QuickActions } from '@/components/dashboard/quick-actions';
 import { RecentActivity } from '@/components/dashboard/recent-activity';
 import { RecentFiles } from '@/components/dashboard/recent-files';
 import { StorageOverview } from '@/components/dashboard/storage-overview';
-import { api } from '@/lib/api-client';
+import { api, ApiError } from '@/lib/api-client';
 import type { ActivityResponse, FilesResponse, StorageResponse } from '@/types';
+
+function formatErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) return `[${err.code}] ${err.message}`;
+  if (err instanceof Error) return err.message;
+  return 'Kesalahan tidak diketahui.';
+}
 
 export default function DashboardPage() {
   const {
@@ -57,9 +63,7 @@ export default function DashboardPage() {
         <Alert variant="destructive">
           <AlertCircle />
           <AlertTitle>Gagal memuat data storage</AlertTitle>
-          <AlertDescription>
-            {storageErr instanceof Error ? storageErr.message : 'Kesalahan tidak diketahui.'}
-          </AlertDescription>
+          <AlertDescription>{formatErrorMessage(storageErr)}</AlertDescription>
         </Alert>
       )}
 
@@ -67,9 +71,7 @@ export default function DashboardPage() {
         <Alert variant="destructive">
           <AlertCircle />
           <AlertTitle>Gagal memuat file terbaru</AlertTitle>
-          <AlertDescription>
-            {filesErr instanceof Error ? filesErr.message : 'Kesalahan tidak diketahui.'}
-          </AlertDescription>
+          <AlertDescription>{formatErrorMessage(filesErr)}</AlertDescription>
         </Alert>
       )}
 
@@ -77,9 +79,7 @@ export default function DashboardPage() {
         <Alert variant="destructive">
           <AlertCircle />
           <AlertTitle>Gagal memuat aktivitas terbaru</AlertTitle>
-          <AlertDescription>
-            {activityErr instanceof Error ? activityErr.message : 'Kesalahan tidak diketahui.'}
-          </AlertDescription>
+          <AlertDescription>{formatErrorMessage(activityErr)}</AlertDescription>
         </Alert>
       )}
 

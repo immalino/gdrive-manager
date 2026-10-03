@@ -3,8 +3,12 @@ import { AppError } from '@/lib/errors';
 import { ok, withAuth } from '@/lib/http';
 import { getAccountForUser } from '@/lib/google/tokens';
 import { GoogleDriveService } from '@/lib/google-drive/service';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const POST = withAuth(async (user, req) => {
+  const limit = rateLimit(`mutate:${user.id}`, 30, 60_000);
+  if (!limit.ok)
+    throw new AppError('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
   const body = (await req.json().catch(() => null)) as {
     name?: string;
     accountId?: string;

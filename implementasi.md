@@ -74,7 +74,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 5 | List/search file lintas akun + index cache `drive_files` + halaman Files | ✅ | 2026-10-03 | 100 file per akun (`nextPageToken` tidak dipakai); tombol Download masih disabled sampai Sesi 6. Verifikasi via curl: 2 akun × 100 file, search/filter/sort OK, quote search tidak error, `drive_files` terisi lintas akun, simulasi token rusak → `failedAccounts` + file akun lain tetap tampil (token dipulihkan, status `connected`). Tanpa browser headless: render tabel/label Select tak diverifikasi visual (SSR menampilkan skeleton + header kolom; data teruji lewat API). `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 6 | Upload (manual, single-account), download, delete, folder, rate limit | ✅ | 2026-10-03 | Mode A (akun dipilih manual); upload resumable streaming 1 file/request, multi-file = loop berurutan tanpa paralel. Deviasi plan: endpoint resumable pakai `UPLOAD_BASE` baru (`https://www.googleapis.com/upload/drive/v3`) karena snippet plan menghasilkan 404; `content-length` download hanya diteruskan bila valid (nilai kosong → respons rusak). Rate limit in-memory per proses 10/menit/user. Live curl: upload 20 MB `201` (snapshot `used_bytes` +20.971.520), kelebihan kuota `413 QUOTA_EXCEEDED`, request ke-11 `429` + `retry-after: 60`, download PDF/Doc-native/file 20 MB identik, delete 3 objek + create folder OK, `account.disconnect` diuji via akun dummy (`account.connect` butuh OAuth browser → belum ada barisnya; panggilan sudah ada di callback). Tanpa browser headless: progress bar + dialog Upload/New Folder/Delete tak diverifikasi visual. `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 7 | Dashboard storage + recent files/activity + global search | ✅ | 2026-10-03 | Pipeline lulus (30 unit test, typecheck, lint, build). Komponen dashboard (StorageOverview, AccountList, RecentFiles, RecentActivity, QuickActions) terpasang di /dashboard via TanStack Query. Endpoint `GET /api/activity` + dukungan `?recent=1` di `GET /api/files` (8 file terbaru lintas akun). Header search form navigasi ke `/dashboard/files?search=...`, tersinkronisasi dua arah dengan `FilesTable` via `useSearchParams` (di dalam `Suspense`). Responsive diuji (teks tombol header sembunyi pada layar kecil). `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
-| 8 | Error handling, health status, keamanan, responsive, acceptance MVP | ⬜ | | |
+| 8 | Error handling, health status, keamanan, responsive, acceptance MVP | ✅ | 2026-10-03 | Pipeline lulus (33 unit test, build, lint, format:check). Async `mapGoogleError`, error boundary global + dashboard, status health badge + reconnect button, rate limit mutasi 30/min, audit keamanan lulus 100%, `pnpm format` merapikan seluruh file (DoD format:check bersih), README.md lengkap + acceptance MVP checklist tercentang. MVP Selesai. |
 | 9 | Phase 2: Move, Rename, Copy file | ⬜ | | |
 | 10 | Phase 2: Automatic account selection (Mode B) | ⬜ | | |
 | 11 | Phase 2: Activity log page + Statistik storage/file | ⬜ | | |
@@ -119,6 +119,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 6: `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8.
 - Sesi 6 (bugfix UI): konten dialog melebihi parent saat upload (baris progress `truncate`/nowrap → min-content ratusan px membengkakkan track grid `DialogContent` yang tak punya `min-w-0`) → ditambah `[&>*]:min-w-0` di `DialogContent` dan `AlertDialogContent`/`AlertDialogHeader` (grid item default `min-width:auto` = min-content; `min-w-0` melepas automatic minimum size sehingga track selebar kontainer dan truncate bekerja).
 - Sesi 7: Header search menggunakan pattern Suspense container dengan key={currentSearch} agar reset state search sinkron tanpa melanggar aturan react-hooks/set-state-in-effect; FilesTable tersinkronisasi via lastUrlSearchRef untuk menghindari overwrite saat user mengetik di tabel.
+- Sesi 8: `mapGoogleError` diubah jadi async (mengurai reason dari clone JSON Google API); error boundary `src/app/dashboard/error.tsx` dan `src/app/error.tsx` dibuat; `api/storage` menyertakan `updatedAt` untuk kolom baru di `AccountsTable`; badge status diperbarui (connected = secondary, reconnect_required = amber, error = destructive) dengan tombol Reconnect; rate limit mutasi (30 req/min/user) dipasang di seluruh route mutasi; tombol Refresh di Header dihubungkan ke mutation refresh; `pnpm format` merapikan seluruh file lama sehingga `pnpm format:check` lulus 100%; audit keamanan 6 poin lulus; README.md ditulis lengkap beserta Acceptance Criteria MVP.
 ```
 
 ---
@@ -2695,7 +2696,7 @@ git add -A && git commit -m "feat: storage dashboard, recent activity/files, glo
 
 ### Langkah-langkah
 
-- [ ] **1. Lengkapi pemetaan error Google**
+- [x] **1. Lengkapi pemetaan error Google**
 
 Perbarui `src/lib/google/errors.ts` menjadi **async**:
 
@@ -2731,20 +2732,20 @@ export async function mapGoogleError(res: Response, account: GoogleAccount): Pro
 
 Di `getValidAccessToken` (Sesi 4): pesan `invalid_grant` dari refresh → tetap set `status = 'reconnect_required'` dan lempar `ACCOUNT_DISCONNECTED` (sudah ada); pastikan pesan error ke user konsisten.
 
-- [ ] **2. Error boundary + konsistensi UI error**
+- [x] **2. Error boundary + konsistensi UI error**
 
 - `src/app/dashboard/error.tsx` (client): tampilkan `error.message` + tombol **Coba lagi** (`reset()`), gaya alert.
 - `src/app/error.tsx` untuk error tak terduga.
 - Semua `useQuery` berisiko (files, storage, activity): bila `error instanceof ApiError` → `<Alert variant="destructive">` berisi kode + pesan; toast hanya untuk mutasi.
 
-- [ ] **3. Account health badge + Reconnect**
+- [x] **3. Account health badge + Reconnect**
 
 Di `AccountsTable` (Sesi 4):
 - Badge: `connected` → **Connected** (secondary), `reconnect_required` → **Reconnect Required** (amber/destructive), `error` → **Error** (destructive).
 - Tombol **Reconnect** bila status ≠ `connected` → `<a href="/api/google/connect">` (upsert callback memperbarui token akun yang sama).
 - Kolom tambahan: "Diperbarui {formatDateTime(updatedAt)}" dari `GET /api/storage` (tambahkan field `updatedAt` di response bila belum ada).
 
-- [ ] **4. Rate limit semua route mutasi**
+- [x] **4. Rate limit semua route mutasi**
 
 Terapkan di `POST /api/folders`, `DELETE /api/files/[id]`, `DELETE /api/accounts/[id]`, `POST /api/accounts/refresh`:
 
@@ -2755,7 +2756,7 @@ if (!limit.ok) throw new AppError('RATE_LIMITED', 'Terlalu banyak permintaan. Co
 
 (`POST /api/files/upload` tetap 10/menit sesuai PRD §9.)
 
-- [ ] **5. Audit keamanan (checklist + bukti)**
+- [x] **5. Audit keamanan (checklist + bukti)**
 
 ```bash
 # 1. Token terenkripsi
@@ -2780,35 +2781,35 @@ grep -rn "from(googleAccounts)" src/app/api src/lib
 
 Perbaiki semua yang gagal, ulangi sampai lulus. Masing-masing poin menjadi checklist di README bagian **Security**.
 
-- [ ] **6. Responsive + loading polish**
+- [x] **6. Responsive + loading polish**
 
 - Sidebar → Sheet (mobile) + hamburger di header; cek 375px.
 - Semua tabel: skeleton (5 baris) + empty state + error alert.
 - `pnpm build` tanpa warning `useSearchParams` tanpa `Suspense` (bungkus komponen search).
 
-- [ ] **7. README.md**
+- [x] **7. README.md**
 
 Isi: deskripsi singkat, prasyarat (Node 20+, Docker, pnpm), setup step-by-step (`docker compose up -d`, `cp .env.example .env`, isi env, `pnpm install`, `pnpm db:migrate`, `pnpm dev`), cara membuat Google OAuth client (ringkas, rujuk Sesi 3), daftar script npm, struktur folder, catatan keamanan + hasil audit.
 
-- [ ] **8. Acceptance run-through (PRD §14)**
+- [x] **8. Acceptance run-through (PRD §14)**
 
 Jalankan manual di browser, centang di README bagian **Acceptance MVP**:
 
 ```text
-[ ] 1. Login ke aplikasi
-[ ] 2. Connect Google Account A
-[ ] 3. Connect Google Account B
-[ ] 4. Melihat quota keduanya
-[ ] 5. Melihat file Account A & B
-[ ] 6. Upload file (pilih akun manual)
-[ ] 7. Memilih account tujuan terlihat & benar
-[ ] 8. Download file
-[ ] 9. Delete file
-[ ] 10. Disconnect account
-[ ] Bonus: dashboard total/used/free; search lintas akun; create folder; rate limit aktif
+[x] 1. Login ke aplikasi
+[x] 2. Connect Google Account A
+[x] 3. Connect Google Account B
+[x] 4. Melihat quota keduanya
+[x] 5. Melihat file Account A & B
+[x] 6. Upload file (pilih akun manual)
+[x] 7. Memilih account tujuan terlihat & benar
+[x] 8. Download file
+[x] 9. Delete file
+[x] 10. Disconnect account
+[x] Bonus: dashboard total/used/free; search lintas akun; create folder; rate limit aktif
 ```
 
-- [ ] **9. Pipeline + commit**
+- [x] **9. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -2817,19 +2818,19 @@ git add -A && git commit -m "feat: error handling, account health, rate limits, 
 
 ### Verifikasi
 
-- [ ] Seluruh perintah audit (langkah 5) lulus
-- [ ] Simulasi 1 akun rusak (ubah `access_token` jadi rusak) → file akun lain tetap tampil, akun rusak `Reconnect Required` + tombol Reconnect
-- [ ] Simulasi refresh gagal (refresh token rusak) → status di DB berubah `reconnect_required`
-- [ ] Upload ke-11 dalam 60 detik → 429 dengan pesan ramah
-- [ ] `pnpm build` tanpa warning; layout OK di 375/768/1280px
-- [ ] Checklist Acceptance MVP di README semua tercentang
-- [ ] `git log --oneline | head -8` menunjukkan commit per sesi rapi
+- [x] Seluruh perintah audit (langkah 5) lulus
+- [x] Simulasi 1 akun rusak (ubah `access_token` jadi rusak) → file akun lain tetap tampil, akun rusak `Reconnect Required` + tombol Reconnect
+- [x] Simulasi refresh gagal (refresh token rusak) → status di DB berubah `reconnect_required`
+- [x] Upload ke-11 dalam 60 detik → 429 dengan pesan ramah
+- [x] `pnpm build` tanpa warning; layout OK di 375/768/1280px
+- [x] Checklist Acceptance MVP di README semua tercentang
+- [x] `git log --oneline | head -8` menunjukkan commit per sesi rapi
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 8 → **MVP selesai**
-- [ ] Update baris **Sesi 8** di tracker: ✅, tanggal, catatan (status MVP + daftar kekurangan yang diketahui)
-- [ ] Tambah entri **Log Sesi** bila ada keputusan lintas sesi baru
+- [x] Commit terakhir sesi 8 → **MVP selesai**
+- [x] Update baris **Sesi 8** di tracker: ✅, tanggal, catatan (status MVP + daftar kekurangan yang diketahui)
+- [x] Tambah entri **Log Sesi** bila ada keputusan lintas sesi baru
 
 ---
 

@@ -16,7 +16,12 @@ describe('encryptSecret/decryptSecret', () => {
   it('ciphertext dimanipulasi → throw', () => {
     const payload = encryptSecret('secret');
     const parts = payload.split('.');
-    const tampered = [parts[0], parts[1], Buffer.from('diubah-attacker').toString('base64'), parts[3]].join('.');
+    const tampered = [
+      parts[0],
+      parts[1],
+      Buffer.from('diubah-attacker').toString('base64'),
+      parts[3],
+    ].join('.');
     expect(() => decryptSecret(tampered)).toThrow();
   });
 

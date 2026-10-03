@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { api } from '@/lib/api-client';
+import { api, ApiError } from '@/lib/api-client';
 import { formatBytes, formatDateTime } from '@/lib/format';
 import type { AccountStatus, StorageAccountItem, StorageResponse } from '@/types';
 
@@ -40,8 +40,8 @@ const STATUS_LABEL: Record<AccountStatus, string> = {
   error: 'Error',
 };
 
-const STATUS_VARIANT: Record<AccountStatus, 'default' | 'outline' | 'destructive'> = {
-  connected: 'default',
+const STATUS_VARIANT: Record<AccountStatus, 'secondary' | 'outline' | 'destructive'> = {
+  connected: 'secondary',
   reconnect_required: 'outline',
   error: 'destructive',
 };
@@ -125,17 +125,63 @@ export function AccountsTable() {
       )}
 
       {isPending ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20" />
-          ))}
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-20" />
+            ))}
+          </div>
+          <Card>
+            <CardContent className="px-0 pt-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Account</TableHead>
+                    <TableHead className="text-right">Used</TableHead>
+                    <TableHead className="text-right">Free</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Diperbarui</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={`acc-skeleton-${i}`}>
+                      <TableCell>
+                        <Skeleton className="h-5 w-40" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="ml-auto h-5 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="ml-auto h-5 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="ml-auto h-5 w-12" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </div>
       ) : isError ? (
         <Alert variant="destructive">
           <AlertCircle />
           <AlertTitle>Gagal memuat data storage</AlertTitle>
           <AlertDescription>
-            {error instanceof Error ? error.message : 'Kesalahan tidak diketahui.'}
+            {error instanceof ApiError
+              ? `[${error.code}] ${error.message}`
+              : error instanceof Error
+                ? error.message
+                : 'Kesalahan tidak diketahui.'}
           </AlertDescription>
         </Alert>
       ) : (
@@ -163,6 +209,7 @@ export function AccountsTable() {
                       <TableHead className="text-right">Used</TableHead>
                       <TableHead className="text-right">Free</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Diperbarui</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -194,12 +241,37 @@ export function AccountsTable() {
                           {formatBytes(account.freeBytes)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={STATUS_VARIANT[account.status]}>
+                          <Badge
+                            variant={STATUS_VARIANT[account.status]}
+                            className={
+                              account.status === 'reconnect_required'
+                                ? 'border-amber-500/40 bg-amber-500/10 text-amber-500 dark:border-amber-400/40 dark:text-amber-400'
+                                : undefined
+                            }
+                          >
                             {STATUS_LABEL[account.status]}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {account.updatedAt ? formatDateTime(account.updatedAt) : '—'}
+                        </TableCell>
                         <TableCell>
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {account.status !== 'connected' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 border-amber-500/40 text-xs text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 dark:border-amber-400/40 dark:text-amber-400"
+                                render={
+                                  <a
+                                    href="/api/google/connect"
+                                    aria-label={`Hubungkan ulang ${account.email}`}
+                                  />
+                                }
+                              >
+                                Reconnect
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon-sm"

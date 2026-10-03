@@ -18,10 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatDateTime } from '@/lib/format';
 import type { ActivityItem } from '@/types';
 
-const ACTION_CONFIG: Record<
-  string,
-  { label: string; icon: typeof Upload; color: string }
-> = {
+const ACTION_CONFIG: Record<string, { label: string; icon: typeof Upload; color: string }> = {
   'file.upload': { label: 'Upload file', icon: Upload, color: 'text-emerald-500' },
   'file.download': { label: 'Download file', icon: Download, color: 'text-blue-500' },
   'file.delete': { label: 'Hapus file', icon: Trash2, color: 'text-rose-500' },
@@ -107,9 +104,7 @@ export function RecentActivity({ activity = [], isLoading }: RecentActivityProps
                         )}
                       </p>
                       {item.email && (
-                        <p className="truncate text-xs text-muted-foreground mt-1">
-                          {item.email}
-                        </p>
+                        <p className="truncate text-xs text-muted-foreground mt-1">{item.email}</p>
                       )}
                     </div>
                   </div>
