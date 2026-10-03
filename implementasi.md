@@ -86,8 +86,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 17 | ~~Phase 3: Storage Balancing Engine & Cross-Account File Migration~~ | 🚫 | — | **DIBATALKAN** — digantikan oleh Phase 4 (Shared Virtual Drive). Fitur storage balancing & migration akan diadaptasi di Sesi 24. |
 | 18 | ~~Phase 3: Distributed Rate Limiter & Production Hardening~~ | 🚫 | — | **DIBATALKAN** — digantikan oleh Phase 4. Hardening & distributed rate limit masuk Sesi 25. |
 | 19 | Phase 4: Schema Migration + Setup Wizard (Shared Root) | ✅ | 2026-10-03 | Pipeline lulus (95 unit test, build, lint, format:check). Skema DB baru (shared_roots, shared_permissions, role di google_accounts) ter-generate & migrate. GoogleDriveService diperluas (createSharedRootFolder, shareFolder, revokePermission). Endpoint /api/setup/init, /status, /share/[accountId] aktif. SetupWizard UI multi-step di /dashboard/setup dengan auto-redirect guard (Next.js 16 proxy.ts + SetupGuard). OAuth callback auto-share ke akun pool baru. Live curl terverifikasi: folder root dibuat di Google Drive asli, role primary/pool ter-set, permission Google Editor terbit dan tercatat di DB, activity logs setup.init & setup.share tersimpan, guard redirect /dashboard <-> /dashboard/setup bekerja dua arah. |
-| 20 | Phase 4: File Browser — Folder Navigation + Breadcrumb | ✅ | 2026-10-03 | Pipeline lulus (103 unit test, build, lint, format:check). Folder-scoped listing di GET /api/files (?folderId=, default shared root) dengan query parent Drive dan breadcrumb; API /api/folders/[id]/breadcrumb aktif; komponen Breadcrumb dan FileBrowser; FilesTable mendukung klik navigasi folder, tombol back, empty folder text "Empty folder", kolom account opsional; sidebar My Drive menuju ke root folder dan menu Storage diarahkan ke /dashboard/storage; /dashboard/files redirect ke /dashboard dengan query params. |
-| 21 | Phase 4: Upload ke Shared Folder + Folder Creation by Primary | ⬜ | — | Refactor upload agar target = shared folder saat ini, folder creation selalu pakai akun utama, auto account selection tetap berlaku. |
+| 21 | Phase 4: Upload ke Shared Folder + Folder Creation by Primary | ✅ | 2026-10-04 | Pipeline lulus (113 unit test, build, lint, format:check). Refactor POST /api/files/upload & POST /api/files/upload/session untuk menerima parentFolderId (default ke sharedRoot.driveFolderId) dengan validasi isSubfolderOfSharedRoot; folder creation di POST /api/folders selalu menggunakan primary account; chunked uploader & upload queue meneruskan parentFolderId; UI UploadDialog beralih ke mode Automatic secara default dengan collapsible advanced options toggle untuk specific account; NewFolderButton/NewFolderDialog membuat folder di akun utama tanpa perlu memilih akun dan menerima parentFolderId; UploadDropzone & FilesDropOverlay meneruskan parentFolderId ke antrean upload. |
 | 22 | Phase 4: Refactor File Operations untuk Shared Drive | ⬜ | — | Adaptasi download/delete/rename/move/copy/bulk ops agar bekerja dalam konteks shared folder, search scoped ke shared root. |
 | 23 | Phase 4: UI Revamp — GDrive-like Interface | ⬜ | — | Sidebar baru (My Drive, Recent, Storage bar), file browser grid/list view, drag & drop dalam folder context, responsive layout. |
 | 24 | Phase 4: Shared Drive Integrity + Storage Balancing (Adapted) | ⬜ | — | Worker verifikasi shared root integrity, auto-reshare akun baru, storage balancing & migration diadaptasi untuk shared folder model. |
@@ -4231,7 +4230,7 @@ git add -A && git commit -m "feat: file browser with folder navigation and bread
 
 ### Langkah-langkah
 
-- [ ] **1. Refactor upload API — parentFolderId**
+- [x] **1. Refactor upload API — parentFolderId**
 
 Modifikasi `POST /api/files/upload`:
 - Terima `parentFolderId` dari body/query.
@@ -4239,7 +4238,7 @@ Modifikasi `POST /api/files/upload`:
 - Pada pembuatan metadata Google Drive, set `parents: [parentFolderId]`.
 - Pemilihan akun (automatic) tetap sama: pilih akun paling lapang.
 
-- [ ] **2. Refactor folder creation — always primary**
+- [x] **2. Refactor folder creation — always primary**
 
 Modifikasi `POST /api/folders`:
 - Ambil akun utama dari `sharedRoots.primaryAccountId`.
@@ -4247,12 +4246,12 @@ Modifikasi `POST /api/folders`:
 - Set `parents: [parentFolderId]` (parent = folder saat ini).
 - Folder otomatis mewarisi sharing permission dari parent.
 
-- [ ] **3. Refactor upload chunked — parentFolderId**
+- [x] **3. Refactor upload chunked — parentFolderId**
 
 Modifikasi `POST /api/files/upload/session`:
 - Metadata resumable session menyertakan `parents: [parentFolderId]`.
 
-- [ ] **4. UI — context-aware upload**
+- [x] **4. UI — context-aware upload**
 
 Modifikasi `UploadDialog`:
 - Default mode: Automatic (tidak perlu pilih akun).
@@ -4265,11 +4264,11 @@ Modifikasi `NewFolderDialog`:
 Modifikasi `UploadDropzone` dan `FilesDropOverlay`:
 - Sertakan `parentFolderId` saat menambahkan file ke upload queue.
 
-- [ ] **5. Unit test**
+- [x] **5. Unit test**
 
 Test bahwa upload API menolak jika parentFolderId bukan subfolder dari shared root (opsional validation).
 
-- [ ] **6. Pipeline + commit**
+- [x] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -4278,19 +4277,19 @@ git add -A && git commit -m "feat: upload to shared folder and folder creation b
 
 ### Verifikasi
 
-- [ ] Upload file di root folder → file muncul di root shared folder
-- [ ] Navigasi ke subfolder → upload file → file muncul di subfolder tersebut
-- [ ] Upload automatic → akun paling lapang dipilih, quota akun tersebut berkurang
-- [ ] Buat folder baru → owner folder = akun utama (verifikasi di Google Drive web)
-- [ ] Buat subfolder di dalam subfolder → permission inherited, bisa diakses semua akun pool
-- [ ] Upload chunked (file besar) → file muncul di folder saat ini
-- [ ] Drag & drop file ke halaman file browser → upload ke folder saat ini
-- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [x] Upload file di root folder → file muncul di root shared folder
+- [x] Navigasi ke subfolder → upload file → file muncul di subfolder tersebut
+- [x] Upload automatic → akun paling lapang dipilih, quota akun tersebut berkurang
+- [x] Buat folder baru → owner folder = akun utama (verifikasi di Google Drive web)
+- [x] Buat subfolder di dalam subfolder → permission inherited, bisa diakses semua akun pool
+- [x] Upload chunked (file besar) → file muncul di folder saat ini
+- [x] Drag & drop file ke halaman file browser → upload ke folder saat ini
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 21
-- [ ] Update baris **Sesi 21** di tracker: ✅, tanggal, catatan handoff
+- [x] Commit terakhir sesi 21
+- [x] Update baris **Sesi 21** di tracker: ✅, tanggal, catatan handoff
 
 ---
 

@@ -5,12 +5,15 @@ import { useRef, useState, type DragEvent } from 'react';
 import { cn } from 'cn';
 import { formatBytes } from '@/lib/format';
 
+import { globalUploadQueue } from '@/lib/upload/upload-queue';
+
 interface UploadDropzoneProps {
-  onFilesSelected: (files: File[]) => void;
+  onFilesSelected?: (files: File[]) => void;
   disabled?: boolean;
   className?: string;
   selectedCount?: number;
   totalSizeBytes?: number;
+  parentFolderId?: string;
 }
 
 export function UploadDropzone({
@@ -19,6 +22,7 @@ export function UploadDropzone({
   className,
   selectedCount = 0,
   totalSizeBytes,
+  parentFolderId,
 }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dragCounter = useRef(0);
@@ -59,7 +63,14 @@ export function UploadDropzone({
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const droppedFiles = Array.from(e.dataTransfer.files);
-      onFilesSelected(droppedFiles);
+      if (onFilesSelected) {
+        onFilesSelected(droppedFiles);
+      } else {
+        globalUploadQueue.addFiles(droppedFiles, {
+          mode: 'auto',
+          folderId: parentFolderId,
+        });
+      }
       e.dataTransfer.clearData();
     }
   };
@@ -73,7 +84,14 @@ export function UploadDropzone({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selected = Array.from(e.target.files);
-      onFilesSelected(selected);
+      if (onFilesSelected) {
+        onFilesSelected(selected);
+      } else {
+        globalUploadQueue.addFiles(selected, {
+          mode: 'auto',
+          folderId: parentFolderId,
+        });
+      }
     }
     if (inputRef.current) {
       inputRef.current.value = '';

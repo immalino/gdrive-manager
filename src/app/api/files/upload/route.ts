@@ -9,6 +9,8 @@ import { GoogleDriveService } from '@/lib/google-drive/service';
 import { withAuth } from '@/lib/http';
 import { syncQuota } from '@/lib/quota';
 import { rateLimit } from '@/lib/rate-limit';
+import { getSetupStatus } from '@/lib/shared-drive/setup';
+import { isSubfolderOfSharedRoot } from '@/lib/shared-drive/validation';
 import { selectAccount } from '@/lib/upload/select-account';
 
 export const POST = withAuth(async (user, req) => {
@@ -21,10 +23,11 @@ export const POST = withAuth(async (user, req) => {
   }
 
   const sp = req.nextUrl.searchParams;
-  const mode = sp.get('mode') ?? 'manual';
   const accountId = sp.get('accountId');
+  const modeParam = sp.get('mode');
+  const mode = modeParam ?? (accountId ? 'manual' : 'auto');
   const filename = sp.get('filename');
-  const parentId = sp.get('parentId') ?? undefined;
+  const parentFolderIdParam = sp.get('parentFolderId') ?? sp.get('parentId') ?? undefined;
   const contentLength = Number(req.headers.get('content-length') ?? 0);
 
   if (mode !== 'manual' && mode !== 'auto') {
@@ -35,6 +38,29 @@ export const POST = withAuth(async (user, req) => {
   }
   if (mode === 'manual' && !accountId) {
     throw new AppError('VALIDATION', 'accountId, filename, dan content-length wajib.', 400);
+  }
+
+  const setupStatus = await getSetupStatus(user.id);
+  const targetFolderId = parentFolderIdParam || setupStatus.sharedRoot?.driveFolderId;
+
+  if (
+    parentFolderIdParam &&
+    setupStatus.sharedRoot &&
+    parentFolderIdParam !== setupStatus.sharedRoot.driveFolderId
+  ) {
+    const primaryService = setupStatus.primaryAccount
+      ? await GoogleDriveService.forAccount(setupStatus.primaryAccount)
+      : null;
+    if (primaryService) {
+      const isValid = await isSubfolderOfSharedRoot(
+        primaryService,
+        setupStatus.sharedRoot.driveFolderId,
+        parentFolderIdParam,
+      );
+      if (!isValid) {
+        throw new AppError('VALIDATION', 'parentFolderId bukan subfolder dari shared root.', 400);
+      }
+    }
   }
 
   let resolvedAccountId = accountId;
@@ -94,7 +120,7 @@ export const POST = withAuth(async (user, req) => {
       contentLength,
       contentType: req.headers.get('content-type') ?? 'application/octet-stream',
       filename,
-      parentId,
+      parentId: targetFolderId,
     });
 
     await db
@@ -107,7 +133,7 @@ export const POST = withAuth(async (user, req) => {
       googleAccountId: account.id,
       action: 'file.upload',
       fileId: file.id,
-      metadata: { filename, sizeBytes: contentLength },
+      metadata: { filename, sizeBytes: contentLength, parentId: targetFolderId },
     });
 
     return NextResponse.json({ file, jobId: job!.id }, { status: 201 });

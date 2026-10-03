@@ -4,7 +4,10 @@ export const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB (kelipatan 256 KB sesuai spes
 export const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10 MB
 
 export function uploadSmallFile(item: QueueItem, onProgress: (pct: number) => void): Promise<void> {
-  const folderParam = item.folderId ? `&parentId=${encodeURIComponent(item.folderId)}` : '';
+  const targetFolder = item.folderId;
+  const folderParam = targetFolder
+    ? `&parentFolderId=${encodeURIComponent(targetFolder)}&parentId=${encodeURIComponent(targetFolder)}`
+    : '';
   const url =
     item.mode === 'auto'
       ? `/api/files/upload?mode=auto&filename=${encodeURIComponent(item.file.name)}${folderParam}`
@@ -226,6 +229,7 @@ export async function uploadFileChunked(
           contentType: item.file.type || 'application/octet-stream',
           accountId: item.accountId,
           folderId: item.folderId,
+          parentFolderId: item.folderId,
           mode: item.mode,
         }),
         signal: item.abortController?.signal,

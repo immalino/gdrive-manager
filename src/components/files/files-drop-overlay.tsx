@@ -8,9 +8,14 @@ import { globalUploadQueue } from '@/lib/upload/upload-queue';
 interface FilesDropOverlayProps {
   children: ReactNode;
   activeAccountId?: string;
+  parentFolderId?: string;
 }
 
-export function FilesDropOverlay({ children, activeAccountId }: FilesDropOverlayProps) {
+export function FilesDropOverlay({
+  children,
+  activeAccountId,
+  parentFolderId,
+}: FilesDropOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
@@ -57,6 +62,7 @@ export function FilesDropOverlay({ children, activeAccountId }: FilesDropOverlay
         globalUploadQueue.addFiles(droppedFiles, {
           mode: isManual ? 'manual' : 'auto',
           accountId: isManual ? activeAccountId : undefined,
+          folderId: parentFolderId,
         });
         toast.info(`${droppedFiles.length} file ditambahkan ke antrean upload.`);
       }
@@ -73,7 +79,7 @@ export function FilesDropOverlay({ children, activeAccountId }: FilesDropOverlay
       window.removeEventListener('dragleave', handleDragLeave);
       window.removeEventListener('drop', handleDrop);
     };
-  }, [activeAccountId]);
+  }, [activeAccountId, parentFolderId]);
 
   return (
     <div className="relative flex flex-1 flex-col min-h-0">

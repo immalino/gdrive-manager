@@ -8,6 +8,8 @@ import { GoogleDriveService } from '@/lib/google-drive/service';
 import { ok, withAuth } from '@/lib/http';
 import { syncQuota } from '@/lib/quota';
 import { rateLimit } from '@/lib/rate-limit';
+import { getSetupStatus } from '@/lib/shared-drive/setup';
+import { isSubfolderOfSharedRoot } from '@/lib/shared-drive/validation';
 import { selectAccount } from '@/lib/upload/select-account';
 
 export const POST = withAuth(async (user, req) => {
@@ -25,6 +27,7 @@ export const POST = withAuth(async (user, req) => {
     contentType?: string;
     accountId?: string;
     folderId?: string;
+    parentFolderId?: string;
     mode?: 'auto' | 'manual';
   } | null;
 
@@ -32,9 +35,10 @@ export const POST = withAuth(async (user, req) => {
     throw new AppError('VALIDATION', 'Request body JSON tidak valid.', 400);
   }
 
-  const { filename, fileSize, contentType, folderId } = body;
-  const mode = body.mode ?? 'manual';
+  const { filename, fileSize, contentType } = body;
+  const mode = body.mode ?? (body.accountId ? 'manual' : 'auto');
   const accountId = body.accountId;
+  const parentFolderIdParam = body.parentFolderId ?? body.folderId ?? undefined;
 
   if (mode !== 'manual' && mode !== 'auto') {
     throw new AppError('VALIDATION', 'mode harus auto atau manual.', 400);
@@ -44,6 +48,29 @@ export const POST = withAuth(async (user, req) => {
   }
   if (mode === 'manual' && !accountId) {
     throw new AppError('VALIDATION', 'accountId wajib untuk mode manual.', 400);
+  }
+
+  const setupStatus = await getSetupStatus(user.id);
+  const targetFolderId = parentFolderIdParam || setupStatus.sharedRoot?.driveFolderId;
+
+  if (
+    parentFolderIdParam &&
+    setupStatus.sharedRoot &&
+    parentFolderIdParam !== setupStatus.sharedRoot.driveFolderId
+  ) {
+    const primaryService = setupStatus.primaryAccount
+      ? await GoogleDriveService.forAccount(setupStatus.primaryAccount)
+      : null;
+    if (primaryService) {
+      const isValid = await isSubfolderOfSharedRoot(
+        primaryService,
+        setupStatus.sharedRoot.driveFolderId,
+        parentFolderIdParam,
+      );
+      if (!isValid) {
+        throw new AppError('VALIDATION', 'parentFolderId bukan subfolder dari shared root.', 400);
+      }
+    }
   }
 
   let resolvedAccountId = accountId;
@@ -103,7 +130,7 @@ export const POST = withAuth(async (user, req) => {
       filename,
       mimeType: contentType || 'application/octet-stream',
       fileSize,
-      parentId: folderId || undefined,
+      parentId: targetFolderId || undefined,
     });
 
     await db

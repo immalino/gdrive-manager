@@ -65,15 +65,21 @@ export class UploadQueueManager {
 
   addFiles(
     files: File[],
-    options: { accountId?: string; folderId?: string; mode: 'auto' | 'manual' },
+    options: {
+      accountId?: string;
+      folderId?: string;
+      parentFolderId?: string;
+      mode: 'auto' | 'manual';
+    },
   ): QueueItem[] {
+    const targetFolderId = options.parentFolderId ?? options.folderId;
     const newItems: QueueItem[] = files.map((file) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       const item: QueueItem = {
         id,
         file,
         accountId: options.accountId,
-        folderId: options.folderId,
+        folderId: targetFolderId,
         mode: options.mode,
         status: 'queued',
         progress: 0,

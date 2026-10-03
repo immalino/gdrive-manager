@@ -36,7 +36,7 @@ function FileBrowserContent() {
   );
 
   return (
-    <FilesDropOverlay>
+    <FilesDropOverlay parentFolderId={folderId}>
       <div className="flex flex-1 flex-col min-h-0 space-y-4">
         <div className="flex flex-col gap-1 shrink-0">
           <div className="flex items-center justify-between">

@@ -449,7 +449,7 @@ export function FilesTable({
             accounts={storage?.accounts ?? EMPTY_ACCOUNTS}
           />
         </div>
-        <NewFolderButton />
+        <NewFolderButton parentFolderId={folderId} />
       </div>
 
       {failedAccounts.length > 0 && (
