@@ -16,11 +16,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { formatBytes } from '@/lib/format';
-import {
-  defaultBrowserUploader,
-  globalUploadQueue,
-  type QueueItem,
-} from '@/lib/upload/upload-queue';
+import { globalUploadQueue, type QueueItem, uploadFileChunked } from '@/lib/upload/upload-queue';
 
 export function UploadQueueDrawer() {
   const [items, setItems] = useState<QueueItem[]>([]);
@@ -30,7 +26,7 @@ export function UploadQueueDrawer() {
   useEffect(() => {
     // Register uploader that invalidates queries on completion
     globalUploadQueue.setUploader(async (item, onProgress) => {
-      await defaultBrowserUploader(item, onProgress);
+      await uploadFileChunked(item, onProgress);
       queryClient.invalidateQueries({ queryKey: ['files'] });
       queryClient.invalidateQueries({ queryKey: ['storage'] });
     });

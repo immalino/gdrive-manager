@@ -3,6 +3,7 @@ import { AppError } from '@/lib/errors';
 import { mapGoogleError } from '@/lib/google/errors';
 import { getValidAccessToken } from '@/lib/google/tokens';
 import { buildMoveParams } from '@/lib/files/move-params';
+import { buildContentRangeHeader, parseResumeOffset } from '@/lib/upload/chunk-helpers';
 import type { DriveFileDto, DriveQuota } from './types';
 
 const API_BASE = 'https://www.googleapis.com/drive/v3';
@@ -149,6 +150,106 @@ export class GoogleDriveService {
       accountId: this.account.id,
       accountEmail: this.account.email,
     };
+  }
+
+  async initiateResumableSession(meta: {
+    filename: string;
+    mimeType: string;
+    fileSize: number;
+    parentId?: string;
+  }): Promise<string> {
+    const metadata = {
+      name: meta.filename,
+      ...(meta.parentId ? { parents: [meta.parentId] } : {}),
+    };
+
+    const res = await fetch(
+      `${UPLOAD_BASE}/files?uploadType=resumable&fields=id,name,mimeType,size,modifiedTime,parents,webViewLink`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          'X-Upload-Content-Type': meta.mimeType,
+          'X-Upload-Content-Length': String(meta.fileSize),
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: JSON.stringify(metadata),
+      },
+    );
+
+    if (!res.ok) throw await mapGoogleError(res, this.account);
+    const location = res.headers.get('location');
+    if (!location)
+      throw new AppError('UPLOAD_FAILED', 'Google tidak mengembalikan upload session URL.', 500);
+    return location;
+  }
+
+  async getResumableOffset(sessionUri: string, fileSize: number): Promise<number> {
+    const res = await fetch(sessionUri, {
+      method: 'PUT',
+      headers: {
+        'Content-Range': `bytes */${fileSize}`,
+      },
+    });
+
+    if (res.status === 308) {
+      return parseResumeOffset(res.headers.get('range'));
+    }
+    if (res.status === 200 || res.status === 201) {
+      return fileSize; // sudah selesai
+    }
+    throw await mapGoogleError(res, this.account);
+  }
+
+  async uploadChunk(params: {
+    sessionUri: string;
+    chunk: ArrayBuffer;
+    startByte: number;
+    totalSize: number;
+  }): Promise<{ completed: boolean; file?: DriveFileDto }> {
+    const endByte = params.startByte + params.chunk.byteLength - 1;
+    const contentRange = buildContentRangeHeader(params.startByte, endByte, params.totalSize);
+
+    const res = await fetch(params.sessionUri, {
+      method: 'PUT',
+      headers: {
+        'Content-Length': String(params.chunk.byteLength),
+        'Content-Range': contentRange,
+      },
+      body: params.chunk,
+    });
+
+    if (res.status === 308) {
+      return { completed: false };
+    }
+
+    if (res.status === 200 || res.status === 201) {
+      const body = (await res.json()) as {
+        id: string;
+        name: string;
+        mimeType: string;
+        size?: string;
+        modifiedTime?: string;
+        parents?: string[];
+        webViewLink?: string;
+      };
+      return {
+        completed: true,
+        file: {
+          id: body.id,
+          name: body.name,
+          mimeType: body.mimeType,
+          sizeBytes: body.size ? Number(body.size) : null,
+          modifiedAt: body.modifiedTime ?? null,
+          parentId: body.parents?.[0] ?? null,
+          webViewLink: body.webViewLink ?? null,
+          accountId: this.account.id,
+          accountEmail: this.account.email,
+        },
+      };
+    }
+
+    throw await mapGoogleError(res, this.account);
   }
 
   async downloadFile(fileId: string): Promise<Response> {

@@ -18,6 +18,8 @@ export const uploadJobs = pgTable('upload_jobs', {
   status: text('status', { enum: ['pending', 'uploading', 'completed', 'failed'] })
     .notNull()
     .default('pending'),
+  resumableUri: text('resumable_uri'),
+  uploadedBytes: bigint('uploaded_bytes', { mode: 'number' }).notNull().default(0),
   errorMessage: text('error_message'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp('completed_at', { withTimezone: true }),

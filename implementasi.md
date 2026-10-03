@@ -81,7 +81,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 12 | Phase 2: Background sync (worker) + account health monitoring | ✅ | 2026-10-03 | Pipeline lulus (61 unit test, build, lint, format:check). Worker src/worker/index.ts (quota 10m, health 30m, index 60m) beroperasi tanpa Redis; indexAccountFiles dengan paging hingga 2000 file; health check memantau konektivitas & menangani token expired (reconnect_required) serta recovery; Docker service worker terkonfigurasi di docker-compose.yml; panduan VPS (PM2/systemd) didokumentasikan di README; UI AccountsTable & Dashboard auto-refetch storage tiap 5 menit. |
 | 13 | Phase 2: Advanced search + file preview | ✅ | 2026-10-03 | Pipeline lulus (65 unit test, build, lint, format:check). buildDriveQuery diperluas (sizeMin/Max, modifiedAfter/Before). UI FilesFilters mendukung popover filter lanjutan (rentang tanggal, ukuran file angka + unit MB/GB, multi-select checkbox akun, dan tombol reset) dengan URL query params & browser history synchronization. PreviewDialog mendukung preview file Google Drive via iframe dengan tautan fallback Buka di Drive & Download, aksi Preview pada dropdown/quick action baris, serta double-click baris tabel. Live curl terverifikasi: query ukuran >=100MB, multi-akun, kombinasi filter, dan validasi 400. Google Drive API v3 tidak mendukung filter size di q parameter sehingga query disanitasi di service.ts dan difilter in-memory di API route (mirip kind folder/other di Sesi 5). Phase 2 Selesai. |
 | 14 | Phase 3: Drag & Drop + Concurrent Upload Queue & Retry UI | ✅ | 2026-10-03 | Pipeline lulus (69 unit test, build, lint, format:check). UploadQueueManager mengontrol concurrency limit (2 paralel) dengan AbortController cancellation dan retry pool. UploadDropzone menyediakan visual drag-over dan multi-file selector. UploadQueueDrawer mengambang di pojok kanan bawah dashboard layout dengan status per-item, progress bar, tombol cancel/retry individual, dan retry all failed. FilesDropOverlay memungkinkan drag-and-drop langsung file dari desktop di halaman Files ke antrean upload mode auto/aktif. |
-| 15 | Phase 3: Large File Resumable Upload & Network Resilience | ⬜ | — | Resumable session Google Drive tersimpan di DB (`upload_jobs`), upload chunked dengan resume byte offset (`Content-Range`), retry tahan putus koneksi. |
+| 15 | Phase 3: Large File Resumable Upload & Network Resilience | ✅ | 2026-10-03 | Pipeline lulus (81 unit test, build, lint, format:check). Skema upload_jobs diperluas (resumable_uri & uploaded_bytes). GoogleDriveService mendukung initiateResumableSession, getResumableOffset, dan uploadChunk. API /api/files/upload/session, /chunk, dan /session/[id]/status aktif. Helper uploadFileChunked (chunk 5MB, threshold 10MB) terintegrasi dengan UploadQueueManager dan drawer. Live verifikasi lulus: upload 50 MB bertahap (10 chunk), interupsi koneksi pada 50% (offset 26.214.400) dan resume berhasil hingga 100%, checksum SHA-256 identik, DB upload_jobs completed, storage snapshot ter-update, file uji dibersihkan dari Google Drive. |
 | 16 | Phase 3: Multi-Select Table & Bulk Operations (Delete & Move) | ⬜ | — | Checkbox selection pada FilesTable, floating bulk action bar, API `POST /api/files/bulk-delete` & `POST /api/files/bulk-move`, dialog konfirmasi progress. |
 | 17 | Phase 3: Storage Balancing Engine & Cross-Account File Migration | ⬜ | — | Algoritma deteksi ketimpangan storage, rekomendasi rebalance akun, API & pipeline streaming migrasi file lintas akun (`POST /api/files/migrate`). |
 | 18 | Phase 3: Distributed Rate Limiter & Production Hardening | ⬜ | — | Rate limiter PostgreSQL sliding window (multi-instance/VPS), worker heartbeat status di UI, audit keamanan & acceptance run-through Phase 3. |
@@ -131,6 +131,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 12: Worker loop berjalan tanpa top-level await langsung pada format CJS (menggunakan startWorker().catch() dan guard !process.env.VITEST agar aman diimpor Vitest); Docker service worker berjalan dengan image node:22-alpine; indexAccountFiles melakukan upsert batch ke drive_files dengan paging Google Drive hingga 20 halaman (2.000 file/akun); checkAccountHealth memulihkan status ke connected jika kuota berhasil diambil dan mendeteksi ACCOUNT_DISCONNECTED menjadi reconnect_required; penanganan safe() menjamin kegagalan 1 akun tidak mematikan seluruh proses worker.
 - Sesi 13: Google Drive API v3 tidak mendukung term size di parameter q (mengembalikan 400 Bad Request) → buildDriveQuery tetap menghasilkan size > / < sesuai spesifikasi pengujian, lalu query disanitasi di service.ts sebelum dikirim ke Google API dan hasil difilter in-memory di GET /api/files (pola yang sama dengan kind other/folder pada Sesi 5). PreviewDialog menampilkan iframe Google Drive viewer dengan fallback tautan Buka di Drive dan Download. Popover FilesFilters menggunakan Base UI Popover & Checkbox untuk rentang tanggal, rentang ukuran (MB/GB), dan multi-select akun. Double click baris tabel membuka preview. Seluruh Phase 2 selesai.
 - Sesi 14: Concurrency upload dibatasi 2 simultan via UploadQueueManager singleton; UploadDropzone menangani drag-over visual dan multi-file selection; UploadQueueDrawer terpasang di dashboard layout sehingga upload tetap berjalan saat navigasi halaman; drag & drop desktop di /dashboard/files ditangani oleh FilesDropOverlay yang otomatis memasukkan file ke antrean; tombol cancel memicu signal AbortController; tombol retry mengulang upload item gagal tanpa perlu re-pick file; pipeline lulus (69 unit test).
+- Sesi 15: Resumable chunked upload protokol Google Drive (chunk 5 MB kelipatan 256 KB, threshold 10 MB). Endpoint upload/session membuat job 'uploading' dan session URI Google; endpoint upload/chunk menerima chunk binary bertahap dengan Content-Range dan mengupdate uploaded_bytes; endpoint upload/session/[id]/status melakukan rekonsiliasi offset byte yang telah diterima Google (respons 308) saat terjadi diskoneksi atau retry. UploadQueueManager mengintegrasikan uploadFileChunked secara default dengan drawer progress UI. Live verifikasi 50 MB dengan simulasi putus koneksi di 50% berhasil resume hingga 100% dengan SHA-256 identik.
 ```
 ```
 
@@ -3308,7 +3309,7 @@ git add -A && git commit -m "feat: drag-and-drop and concurrent upload queue wit
 
 ### Langkah-langkah
 
-- [ ] **1. Migrasi skema database upload_jobs**
+- [x] **1. Migrasi skema database upload_jobs**
 
 Perbarui `src/db/schema/upload-jobs.ts`:
 Tambahkan kolom `resumableUri` dan `uploadedBytes`:
@@ -3343,7 +3344,7 @@ pnpm drizzle-kit generate
 pnpm drizzle-kit push
 ```
 
-- [ ] **2. Unit test chunking & Google 308 resume range (merah)**
+- [x] **2. Unit test chunking & Google 308 resume range (merah)**
 
 Buat `src/lib/__tests__/chunked-upload.test.ts`:
 
@@ -3372,7 +3373,7 @@ describe('Chunk Helpers', () => {
 
 Jalankan `pnpm test src/lib/__tests__/chunked-upload.test.ts` → FAIL.
 
-- [ ] **3. Implementasi helper chunk & service methods**
+- [x] **3. Implementasi helper chunk & service methods**
 
 Buat `src/lib/upload/chunk-helpers.ts`:
 
@@ -3483,7 +3484,7 @@ async uploadChunk(params: {
 
 Jalankan `pnpm test src/lib/__tests__/chunked-upload.test.ts` → PASS.
 
-- [ ] **4. API Endpoints untuk sesi chunked upload**
+- [x] **4. API Endpoints untuk sesi chunked upload**
 
 Buat `src/app/api/files/upload/session/route.ts`:
 - Route `POST` dengan `withAuth`: menerima `{ filename, fileSize, contentType, accountId?, folderId?, mode? }`.
@@ -3509,7 +3510,7 @@ Buat `src/app/api/files/upload/chunk/route.ts`:
 Buat `src/app/api/files/upload/session/[id]/status/route.ts`:
 - Route `GET` dengan `withAuth`: mengembalikan offset terbaru via `service.getResumableOffset(...)`.
 
-- [ ] **5. Client ChunkedUploader & integrasi UploadQueueManager**
+- [x] **5. Client ChunkedUploader & integrasi UploadQueueManager**
 
 Buat `src/lib/upload/chunked-uploader.ts`:
 - Ukuran chunk: 5 MB (`5 * 1024 * 1024` byte, kelipatan 256 KB sesuai spesifikasi Google).
@@ -3525,7 +3526,7 @@ Buat `src/lib/upload/chunked-uploader.ts`:
     5. Laporkan persentase `(uploadedBytes / totalSize) * 100` ke callback `onProgress`.
 - Pasang `uploadFileChunked` sebagai default uploader pada `globalUploadQueue` di `src/lib/upload/upload-queue.ts`.
 
-- [ ] **6. Pipeline + commit**
+- [x] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -3534,18 +3535,18 @@ git add -A && git commit -m "feat: large file chunked resumable upload and netwo
 
 ### Verifikasi
 
-- [ ] Unit test `chunk-helpers.test.ts` PASS
-- [ ] Upload file 50 MB+ terkirim dalam beberapa chunk bertahap (progress 10%..30%..100%)
-- [ ] Simulasi interupsi koneksi (abort di 50% lalu resume) mengembalikan offset 50% dan melanjutkan sisa chunk
-- [ ] File yang selesai diunggah dapat diunduh kembali dan memiliki checksum/size identik
-- [ ] Tabel `upload_jobs` mencatat `status = 'completed'` dengan `uploaded_bytes = file_size`
-- [ ] Snapshot storage akun ter-update otomatis pasca upload chunk selesai
-- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [x] Unit test `chunk-helpers.test.ts` PASS
+- [x] Upload file 50 MB+ terkirim dalam beberapa chunk bertahap (progress 10%..30%..100%)
+- [x] Simulasi interupsi koneksi (abort di 50% lalu resume) mengembalikan offset 50% dan melanjutkan sisa chunk
+- [x] File yang selesai diunggah dapat diunduh kembali dan memiliki checksum/size identik
+- [x] Tabel `upload_jobs` mencatat `status = 'completed'` dengan `uploaded_bytes = file_size`
+- [x] Snapshot storage akun ter-update otomatis pasca upload chunk selesai
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 15
-- [ ] Update baris **Sesi 15** di tracker: ✅, tanggal, catatan handoff (chunk size, protokol resume Google)
+- [x] Commit terakhir sesi 15
+- [x] Update baris **Sesi 15** di tracker: ✅, tanggal, catatan handoff (chunk size, protokol resume Google)
 
 ---
 

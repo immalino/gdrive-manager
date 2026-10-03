@@ -272,3 +272,121 @@ describe('GoogleDriveService file & folder operations', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('GoogleDriveService resumable chunked upload methods', () => {
+  it('initiateResumableSession mengembalikan upload location URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 200,
+        headers: {
+          location: 'https://www.googleapis.com/upload/drive/v3/files?upload_id=resumable-123',
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const sessionUri = await service().initiateResumableSession({
+      filename: 'large.zip',
+      mimeType: 'application/zip',
+      fileSize: 15_000_000,
+      parentId: 'folder-1',
+    });
+
+    expect(sessionUri).toBe(
+      'https://www.googleapis.com/upload/drive/v3/files?upload_id=resumable-123',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('uploadType=resumable'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer access-token-123',
+          'X-Upload-Content-Type': 'application/zip',
+          'X-Upload-Content-Length': '15000000',
+        }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('getResumableOffset mengembalikan offset jika Google mengembalikan 308 Range', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 308,
+        headers: { range: 'bytes=0-5242879' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const offset = await service().getResumableOffset('https://upload.session/uri', 15_000_000);
+    expect(offset).toBe(5242880);
+    expect(fetchMock).toHaveBeenCalledWith('https://upload.session/uri', {
+      method: 'PUT',
+      headers: { 'Content-Range': 'bytes */15000000' },
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('getResumableOffset mengembalikan fileSize jika Google mengembalikan 200 (sudah selesai)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const offset = await service().getResumableOffset('https://upload.session/uri', 15_000_000);
+    expect(offset).toBe(15_000_000);
+    vi.unstubAllGlobals();
+  });
+
+  it('uploadChunk mengembalikan completed: false jika status 308', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 308 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const chunk = new Uint8Array([1, 2, 3, 4]).buffer;
+    const res = await service().uploadChunk({
+      sessionUri: 'https://upload.session/uri',
+      chunk,
+      startByte: 0,
+      totalSize: 100,
+    });
+
+    expect(res.completed).toBe(false);
+    expect(fetchMock).toHaveBeenCalledWith('https://upload.session/uri', {
+      method: 'PUT',
+      headers: {
+        'Content-Length': '4',
+        'Content-Range': 'bytes 0-3/100',
+      },
+      body: chunk,
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('uploadChunk mengembalikan completed: true dan file DTO jika status 200', async () => {
+    const fileBody = {
+      id: 'file-resumable-1',
+      name: 'large.zip',
+      mimeType: 'application/zip',
+      size: '100',
+      modifiedTime: '2026-10-03T12:00:00Z',
+      parents: ['folder-1'],
+      webViewLink: 'https://drive.google.com/file/d/file-resumable-1/view',
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(fileBody), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const chunk = new Uint8Array([1, 2, 3, 4]).buffer;
+    const res = await service().uploadChunk({
+      sessionUri: 'https://upload.session/uri',
+      chunk,
+      startByte: 96,
+      totalSize: 100,
+    });
+
+    expect(res.completed).toBe(true);
+    expect(res.file?.id).toBe('file-resumable-1');
+    expect(res.file?.sizeBytes).toBe(100);
+    expect(res.file?.accountId).toBe(account.id);
+    vi.unstubAllGlobals();
+  });
+});

@@ -1,3 +1,5 @@
+import { uploadFileChunked } from './chunked-uploader';
+
 export type UploadStatus = 'queued' | 'uploading' | 'completed' | 'failed' | 'cancelled';
 
 export interface QueueItem {
@@ -11,6 +13,7 @@ export interface QueueItem {
   error?: string;
   abortController?: AbortController;
   uploadedAt?: Date;
+  jobId?: string;
 }
 
 export type QueueListener = (items: QueueItem[]) => void;
@@ -190,59 +193,11 @@ export class UploadQueueManager {
   }
 }
 
-export const defaultBrowserUploader: FileUploader = (item, onProgress) => {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    if (item.abortController) {
-      if (item.abortController.signal.aborted) {
-        reject(new Error('Aborted'));
-        return;
-      }
-      item.abortController.signal.addEventListener('abort', () => {
-        xhr.abort();
-      });
-    }
-
-    const folderParam = item.folderId ? `&parentId=${encodeURIComponent(item.folderId)}` : '';
-    const url =
-      item.mode === 'auto'
-        ? `/api/files/upload?mode=auto&filename=${encodeURIComponent(item.file.name)}${folderParam}`
-        : `/api/files/upload?mode=manual&accountId=${encodeURIComponent(item.accountId || '')}&filename=${encodeURIComponent(item.file.name)}${folderParam}`;
-
-    xhr.open('POST', url);
-    xhr.setRequestHeader('content-type', item.file.type || 'application/octet-stream');
-
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        onProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    };
-
-    xhr.onload = () => {
-      let body: { error?: { code?: string; message?: string } } | null = null;
-      try {
-        body = xhr.responseText ? JSON.parse(xhr.responseText) : null;
-      } catch {
-        body = null;
-      }
-
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        const errMsg = body?.error?.message ?? `Upload gagal (HTTP ${xhr.status})`;
-        reject(new Error(errMsg));
-      }
-    };
-
-    xhr.onerror = () => reject(new Error('Koneksi gagal saat upload.'));
-    xhr.onabort = () => reject(new Error('Aborted'));
-
-    xhr.send(item.file);
-  });
-};
+export { uploadFileChunked };
+export const defaultBrowserUploader: FileUploader = uploadFileChunked;
 
 // Global singleton instance for application client
 export const globalUploadQueue = new UploadQueueManager({
   maxConcurrency: 2,
-  uploader: typeof window !== 'undefined' ? defaultBrowserUploader : undefined,
+  uploader: typeof window !== 'undefined' ? uploadFileChunked : undefined,
 });
