@@ -99,3 +99,27 @@ export interface FolderItem {
 export interface FoldersResponse {
   folders: FolderItem[];
 }
+
+export interface BulkDeleteItem {
+  id: string;
+  accountId: string;
+  name?: string;
+}
+
+export interface BulkDeleteResponse {
+  deletedCount: number;
+  failedCount: number;
+  errors: Array<{ id: string; name?: string; error?: string }>;
+}
+
+export interface BulkMoveItem {
+  id: string;
+  accountId: string;
+  fromFolderId?: string | null;
+}
+
+export interface BulkMoveResponse {
+  movedCount: number;
+  failedCount: number;
+  errors: Array<{ id: string; error?: string }>;
+}

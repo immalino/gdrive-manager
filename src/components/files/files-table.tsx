@@ -1,7 +1,13 @@
 'use client';
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
+import {
+  createColumnHelper,
+  rowSelectionFeature,
+  tableFeatures,
+  useTable,
+  type RowSelectionState,
+} from '@tanstack/react-table';
 import {
   AlertCircle,
   Archive,
@@ -14,6 +20,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -29,6 +36,7 @@ import type { SortKey } from '@/lib/files/merge';
 import { formatBytes, formatDateTime } from '@/lib/format';
 import type { DriveFileDto } from '@/lib/google-drive/types';
 import type { FilesResponse, StorageAccountItem, StorageResponse } from '@/types';
+import { BulkActionBar } from './bulk-action-bar';
 import { FileActions } from './file-actions';
 import { FilesFilters } from './files-filters';
 import { NewFolderButton } from './new-folder-dialog';
@@ -47,7 +55,7 @@ const KIND_ICON: Record<FileKind, typeof FileText> = {
   folder: Folder,
 };
 
-const features = tableFeatures({});
+const features = tableFeatures({ rowSelectionFeature });
 const helper = createColumnHelper<typeof features, DriveFileDto>();
 
 export interface FilesInitialFilters {
@@ -115,6 +123,9 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
   const [modifiedBefore, setModifiedBefore] = useState<string | undefined>(initial.modifiedBefore);
 
   const [previewFile, setPreviewFile] = useState<DriveFileDto | null>(null);
+
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const lastClickedIndexRef = useRef<number | null>(null);
 
   const filters: FilesFilterState = useMemo(
     () => ({
@@ -201,6 +212,12 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
   }, [filters]);
 
+  const [prevFilters, setPrevFilters] = useState(filters);
+  if (prevFilters !== filters) {
+    setPrevFilters(filters);
+    setRowSelection({});
+  }
+
   const { data, isPending, isError, error } = useQuery({
     queryKey: ['files', filters],
     queryFn: () => api.get<FilesResponse>(`/api/files?${buildFilesParams(filters, true)}`),
@@ -212,57 +229,121 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
     queryFn: () => api.get<StorageResponse>('/api/storage'),
   });
 
-  const columns = useMemo(
-    () =>
-      helper.columns([
-        helper.accessor('name', {
-          header: 'Name',
-          cell: ({ row }) => {
-            const Icon = KIND_ICON[classifyMime(row.original.mimeType)];
-            return (
-              <div className="flex items-center gap-2">
-                <Icon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate font-medium">{row.original.name}</span>
-              </div>
-            );
-          },
-        }),
-        helper.accessor('sizeBytes', {
-          header: 'Size',
-          cell: ({ getValue }) => formatBytes(getValue()),
-        }),
-        helper.accessor('accountEmail', { header: 'Account' }),
-        helper.accessor('modifiedAt', {
-          header: 'Updated',
-          cell: ({ getValue }) => {
-            const value = getValue();
-            return value ? formatDateTime(value) : '—';
-          },
-        }),
-        helper.display({
-          id: 'actions',
-          header: 'Actions',
-          cell: ({ row }) => (
-            <FileActions
-              file={row.original}
-              onPreview={
-                row.original.mimeType !== 'application/vnd.google-apps.folder'
-                  ? () => setPreviewFile(row.original)
-                  : undefined
-              }
+  const columns = helper.columns([
+    helper.display({
+      id: 'select',
+      header: ({ table }) => {
+        const isAllSelected = table.getIsAllPageRowsSelected();
+        const isSomeSelected = table.getIsSomePageRowsSelected();
+        return (
+          <div className="flex items-center justify-center">
+            <Checkbox
+              checked={isAllSelected}
+              indeterminate={!isAllSelected && isSomeSelected}
+              onCheckedChange={(checked) => {
+                table.toggleAllPageRowsSelected(!!checked);
+              }}
+              aria-label="Pilih semua file di halaman ini"
             />
-          ),
-        }),
-      ]),
-    [],
-  );
+          </div>
+        );
+      },
+      cell: ({ row, table }) => (
+        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={row.getIsSelected()}
+            onClick={(e) => {
+              e.stopPropagation();
+              const isShift = e.shiftKey;
+              const targetState = !row.getIsSelected();
+              const prevIndex =
+                table.getSelectedRowModel().rows.length === 0 ? null : lastClickedIndexRef.current;
+
+              if (isShift && prevIndex !== null) {
+                const start = Math.min(prevIndex, row.index);
+                const end = Math.max(prevIndex, row.index);
+                const rows = table.getRowModel().rows;
+                setRowSelection((prev) => {
+                  const next: RowSelectionState = { ...prev };
+                  for (let i = start; i <= end; i++) {
+                    const r = rows[i];
+                    if (r) {
+                      if (targetState) {
+                        next[r.id] = true;
+                      } else {
+                        delete next[r.id];
+                      }
+                    }
+                  }
+                  return next;
+                });
+              } else {
+                row.toggleSelected(targetState);
+              }
+              lastClickedIndexRef.current = row.index;
+            }}
+            onCheckedChange={(checked) => {
+              if (row.getIsSelected() !== !!checked) {
+                row.toggleSelected(!!checked);
+                lastClickedIndexRef.current = row.index;
+              }
+            }}
+            aria-label={`Pilih ${row.original.name}`}
+          />
+        </div>
+      ),
+    }),
+    helper.accessor('name', {
+      header: 'Name',
+      cell: ({ row }) => {
+        const Icon = KIND_ICON[classifyMime(row.original.mimeType)];
+        return (
+          <div className="flex items-center gap-2">
+            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <span className="truncate font-medium">{row.original.name}</span>
+          </div>
+        );
+      },
+    }),
+    helper.accessor('sizeBytes', {
+      header: 'Size',
+      cell: ({ getValue }) => formatBytes(getValue()),
+    }),
+    helper.accessor('accountEmail', { header: 'Account' }),
+    helper.accessor('modifiedAt', {
+      header: 'Updated',
+      cell: ({ getValue }) => {
+        const value = getValue();
+        return value ? formatDateTime(value) : '—';
+      },
+    }),
+    helper.display({
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => (
+        <FileActions
+          file={row.original}
+          onPreview={
+            row.original.mimeType !== 'application/vnd.google-apps.folder'
+              ? () => setPreviewFile(row.original)
+              : undefined
+          }
+        />
+      ),
+    }),
+  ]);
 
   const table = useTable({
     features,
     columns,
     data: data?.files ?? EMPTY_FILES,
     getRowId: (row) => `${row.accountId}:${row.id}`,
+    state: { rowSelection },
+    onRowSelectionChange: setRowSelection,
+    enableRowSelection: true,
   });
+
+  const selectedFiles = table.getSelectedRowModel().rows.map((r) => r.original);
 
   const failedAccounts = data?.failedAccounts ?? [];
 
@@ -337,11 +418,13 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
                 <TableHead
                   key={header.id}
                   className={
-                    header.column.id === 'name'
-                      ? 'w-[45%]'
-                      : header.column.id === 'actions'
-                        ? 'text-right'
-                        : undefined
+                    header.column.id === 'select'
+                      ? 'w-10 px-2'
+                      : header.column.id === 'name'
+                        ? 'w-[45%]'
+                        : header.column.id === 'actions'
+                          ? 'text-right'
+                          : undefined
                   }
                 >
                   {header.isPlaceholder ? null : <table.FlexRender header={header} />}
@@ -354,6 +437,9 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
           {isPending ? (
             Array.from({ length: SKELETON_ROWS }).map((_, i) => (
               <TableRow key={`skeleton-${i}`}>
+                <TableCell className="w-10 px-2 text-center">
+                  <Skeleton className="h-4 w-4 mx-auto" />
+                </TableCell>
                 <TableCell>
                   <Skeleton className="h-4 w-2/3" />
                 </TableCell>
@@ -384,6 +470,7 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
+                data-state={row.getIsSelected() ? 'selected' : undefined}
                 onDoubleClick={() => {
                   if (row.original.mimeType !== 'application/vnd.google-apps.folder') {
                     setPreviewFile(row.original);
@@ -399,11 +486,13 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
                   <TableCell
                     key={cell.id}
                     className={
-                      cell.column.id === 'actions'
-                        ? 'text-right'
-                        : cell.column.id === 'name'
-                          ? 'max-w-0'
-                          : undefined
+                      cell.column.id === 'select'
+                        ? 'w-10 px-2 text-center'
+                        : cell.column.id === 'actions'
+                          ? 'text-right'
+                          : cell.column.id === 'name'
+                            ? 'max-w-0'
+                            : undefined
                     }
                   >
                     <table.FlexRender cell={cell} />
@@ -419,6 +508,14 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
         file={previewFile}
         onOpenChange={(open) => {
           if (!open) setPreviewFile(null);
+        }}
+      />
+
+      <BulkActionBar
+        selectedFiles={selectedFiles}
+        onClearSelection={() => {
+          setRowSelection({});
+          lastClickedIndexRef.current = null;
         }}
       />
     </div>
