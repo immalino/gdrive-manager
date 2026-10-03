@@ -73,7 +73,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 4 | GoogleDriveService (quota) + sinkronisasi quota + halaman Accounts | ✅ | 2026-10-03 | Pipeline lulus + 11 unit test baru (fetch-mocked quota & `mapGoogleError`). Live curl: `POST /api/accounts/refresh` sukses 2 akun (snapshot `0→2→4`; token kedaluwarsa → auto-refresh lewat `getValidAccessToken`), struktur `/api/storage` benar, riwayat `/api/accounts/[id]/storage` OK, disconnect cascade OK, tanpa cookie 401, tidak ada token di log dev. Tanpa browser headless: toast `?connected=` + render tabel setelah hydration tak diverifikasi visual (SSR menampilkan skeleton; data dari API teruji). Password `tes1@example.com` direset ke `Sesi4Verify!` demi verifikasi curl. `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 5 | List/search file lintas akun + index cache `drive_files` + halaman Files | ✅ | 2026-10-03 | 100 file per akun (`nextPageToken` tidak dipakai); tombol Download masih disabled sampai Sesi 6. Verifikasi via curl: 2 akun × 100 file, search/filter/sort OK, quote search tidak error, `drive_files` terisi lintas akun, simulasi token rusak → `failedAccounts` + file akun lain tetap tampil (token dipulihkan, status `connected`). Tanpa browser headless: render tabel/label Select tak diverifikasi visual (SSR menampilkan skeleton + header kolom; data teruji lewat API). `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 6 | Upload (manual, single-account), download, delete, folder, rate limit | ✅ | 2026-10-03 | Mode A (akun dipilih manual); upload resumable streaming 1 file/request, multi-file = loop berurutan tanpa paralel. Deviasi plan: endpoint resumable pakai `UPLOAD_BASE` baru (`https://www.googleapis.com/upload/drive/v3`) karena snippet plan menghasilkan 404; `content-length` download hanya diteruskan bila valid (nilai kosong → respons rusak). Rate limit in-memory per proses 10/menit/user. Live curl: upload 20 MB `201` (snapshot `used_bytes` +20.971.520), kelebihan kuota `413 QUOTA_EXCEEDED`, request ke-11 `429` + `retry-after: 60`, download PDF/Doc-native/file 20 MB identik, delete 3 objek + create folder OK, `account.disconnect` diuji via akun dummy (`account.connect` butuh OAuth browser → belum ada barisnya; panggilan sudah ada di callback). Tanpa browser headless: progress bar + dialog Upload/New Folder/Delete tak diverifikasi visual. `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
-| 7 | Dashboard storage + recent files/activity + global search | ⬜ | | |
+| 7 | Dashboard storage + recent files/activity + global search | ✅ | 2026-10-03 | Pipeline lulus (30 unit test, typecheck, lint, build). Komponen dashboard (StorageOverview, AccountList, RecentFiles, RecentActivity, QuickActions) terpasang di /dashboard via TanStack Query. Endpoint `GET /api/activity` + dukungan `?recent=1` di `GET /api/files` (8 file terbaru lintas akun). Header search form navigasi ke `/dashboard/files?search=...`, tersinkronisasi dua arah dengan `FilesTable` via `useSearchParams` (di dalam `Suspense`). Responsive diuji (teks tombol header sembunyi pada layar kecil). `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 8 | Error handling, health status, keamanan, responsive, acceptance MVP | ⬜ | | |
 | 9 | Phase 2: Move, Rename, Copy file | ⬜ | | |
 | 10 | Phase 2: Automatic account selection (Mode B) | ⬜ | | |
@@ -118,6 +118,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 6 (live): verifikasi curl memakai `tes1@example.com` / `Sesi4Verify!` (Sesi 4/5), cookie `/tmp/opencode/cookies-s6.txt`, `next dev` dihentikan setelah verifikasi. `account.disconnect` diuji dengan baris `google_accounts` dummy (`dummy.sesi6@example.com`, token `v1.dummy`) → baris terhapus + log tertulis; baris `activity_logs` dummy dibiarkan agar bisa dicek ulang. Google Doc native untuk uji export dibuat via Drive API lalu dihapus (kedua akun tidak punya Doc native).
 - Sesi 6: `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8.
 - Sesi 6 (bugfix UI): konten dialog melebihi parent saat upload (baris progress `truncate`/nowrap → min-content ratusan px membengkakkan track grid `DialogContent` yang tak punya `min-w-0`) → ditambah `[&>*]:min-w-0` di `DialogContent` dan `AlertDialogContent`/`AlertDialogHeader` (grid item default `min-width:auto` = min-content; `min-w-0` melepas automatic minimum size sehingga track selebar kontainer dan truncate bekerja).
+- Sesi 7: Header search menggunakan pattern Suspense container dengan key={currentSearch} agar reset state search sinkron tanpa melanggar aturan react-hooks/set-state-in-effect; FilesTable tersinkronisasi via lastUrlSearchRef untuk menghindari overwrite saat user mengetik di tabel.
 ```
 
 ---
@@ -2563,7 +2564,7 @@ git add -A && git commit -m "feat: upload with progress, download, delete, folde
 
 ### Langkah-langkah
 
-- [ ] **1. Endpoint recent files + activity**
+- [x] **1. Endpoint recent files + activity**
 
 Di `GET /api/files` (Sesi 5), tambahkan dukungan `?recent=1`: bila `recent=1`, abaikan search/kind, `pageSize: 8` per akun, lalu hasil akhir `sortFiles(files, 'modified', 'desc').slice(0, 8)`.
 
@@ -2595,7 +2596,7 @@ export const GET = withAuth(async (user, req) => {
 });
 ```
 
-- [ ] **2. Komponen dashboard**
+- [x] **2. Komponen dashboard**
 
 `src/app/dashboard/page.tsx` (client atau server + child client): fetch `['storage']`, `['files', { recent: true }]`, `['activity', { limit: 5 }]` dengan TanStack Query, susun:
 
@@ -2639,7 +2640,7 @@ export function StorageOverview({ totals }: Props) {
 
 States: skeleton saat loading; empty state (0 akun) → ilustrasi + tombol `+ Add Account`.
 
-- [ ] **3. Global search di header**
+- [x] **3. Global search di header**
 
 `src/components/layout/header.tsx` (client): ubah search jadi form:
 
@@ -2653,7 +2654,7 @@ function onSubmit(e: React.FormEvent) {
 
 `FilesTable` (Sesi 5): sinkronkan state search lokal dengan `useSearchParams()` (effek + debounce 400 ms) agar perubahan URL dari header langsung memicu query ulang.
 
-- [ ] **4. Pipeline + commit**
+- [x] **4. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -2662,17 +2663,17 @@ git add -A && git commit -m "feat: storage dashboard, recent activity/files, glo
 
 ### Verifikasi
 
-- [ ] Dashboard menampilkan Total/Used/Free/Accounts **sama persis** dengan halaman Accounts
-- [ ] Progress bar per akun sesuai proporsi; akun tanpa limit → total '—'
-- [ ] Recent Files = 8 file terbaru lintas akun (berdasarkan `modifiedTime`)
-- [ ] Recent Activity menampilkan aksi upload/delete/folder dari sesi 6
-- [ ] Ketik kata di search header → Enter → pindah ke Files dengan hasil terfilter
-- [ ] Layout tidak rusak di 375px (sidebar jadi Sheet/menu)
+- [x] Dashboard menampilkan Total/Used/Free/Accounts **sama persis** dengan halaman Accounts
+- [x] Progress bar per akun sesuai proporsi; akun tanpa limit → total '—'
+- [x] Recent Files = 8 file terbaru lintas akun (berdasarkan `modifiedTime`)
+- [x] Recent Activity menampilkan aksi upload/delete/folder dari sesi 6
+- [x] Ketik kata di search header → Enter → pindah ke Files dengan hasil terfilter
+- [x] Layout tidak rusak di 375px (sidebar jadi Sheet/menu)
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 7
-- [ ] Update baris **Sesi 7** di tracker: ✅, tanggal, catatan
+- [x] Commit terakhir sesi 7
+- [x] Update baris **Sesi 7** di tracker: ✅, tanggal, catatan
 
 ---
 
