@@ -9,11 +9,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect('/sign-in');
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col min-w-0 h-full overflow-hidden">
         <Header user={{ name: user.name, email: user.email }} />
-        <main className="flex-1 overflow-auto p-6">{children}</main>
+        <main className="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col">{children}</main>
       </div>
       <UploadQueueDrawer />
     </div>

@@ -49,8 +49,8 @@ export default async function FilesPage({ searchParams }: FilesPageProps) {
 
   return (
     <FilesDropOverlay activeAccountId={initial.accountId !== 'all' ? initial.accountId : undefined}>
-      <div className="space-y-6">
-        <div>
+      <div className="flex flex-1 flex-col min-h-0 space-y-4">
+        <div className="shrink-0">
           <h1 className="text-xl font-semibold tracking-tight">Files</h1>
           <p className="text-sm text-muted-foreground">
             Jelajahi file dari seluruh akun Google Drive.

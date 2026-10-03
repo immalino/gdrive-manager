@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { cn } from 'cn';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -357,8 +358,8 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex flex-1 flex-col min-h-0 space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between shrink-0">
         <div className="min-w-0 flex-1">
           <FilesFilters
             searchInput={searchInput}
@@ -389,7 +390,7 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
       </div>
 
       {failedAccounts.length > 0 && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="shrink-0">
           <AlertCircle />
           <AlertTitle>Sebagian akun gagal dimuat</AlertTitle>
           <AlertDescription>Gagal memuat file dari: {failedAccounts.join(', ')}</AlertDescription>
@@ -397,7 +398,7 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
       )}
 
       {isError && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="shrink-0">
           <AlertCircle />
           <AlertTitle>Gagal memuat file</AlertTitle>
           <AlertDescription>
@@ -410,22 +411,23 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
         </Alert>
       )}
 
-      <Table>
-        <TableHeader>
+      <Table containerClassName="flex-1 min-h-0 overflow-auto rounded-md border bg-card">
+        <TableHeader className="sticky top-0 z-10 bg-card border-b">
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
+            <TableRow key={headerGroup.id} className="bg-card hover:bg-card">
               {headerGroup.headers.map((header) => (
                 <TableHead
                   key={header.id}
-                  className={
+                  className={cn(
+                    'bg-card',
                     header.column.id === 'select'
                       ? 'w-10 px-2'
                       : header.column.id === 'name'
                         ? 'w-[45%]'
                         : header.column.id === 'actions'
                           ? 'text-right'
-                          : undefined
-                  }
+                          : undefined,
+                  )}
                 >
                   {header.isPlaceholder ? null : <table.FlexRender header={header} />}
                 </TableHead>

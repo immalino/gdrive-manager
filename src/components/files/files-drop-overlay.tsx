@@ -76,7 +76,7 @@ export function FilesDropOverlay({ children, activeAccountId }: FilesDropOverlay
   }, [activeAccountId]);
 
   return (
-    <div className="relative min-h-[calc(100vh-10rem)]">
+    <div className="relative flex flex-1 flex-col min-h-0">
       {children}
 
       {isDragging && (
