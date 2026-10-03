@@ -82,7 +82,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 13 | Phase 2: Advanced search + file preview | ✅ | 2026-10-03 | Pipeline lulus (65 unit test, build, lint, format:check). buildDriveQuery diperluas (sizeMin/Max, modifiedAfter/Before). UI FilesFilters mendukung popover filter lanjutan (rentang tanggal, ukuran file angka + unit MB/GB, multi-select checkbox akun, dan tombol reset) dengan URL query params & browser history synchronization. PreviewDialog mendukung preview file Google Drive via iframe dengan tautan fallback Buka di Drive & Download, aksi Preview pada dropdown/quick action baris, serta double-click baris tabel. Live curl terverifikasi: query ukuran >=100MB, multi-akun, kombinasi filter, dan validasi 400. Google Drive API v3 tidak mendukung filter size di q parameter sehingga query disanitasi di service.ts dan difilter in-memory di API route (mirip kind folder/other di Sesi 5). Phase 2 Selesai. |
 | 14 | Phase 3: Drag & Drop + Concurrent Upload Queue & Retry UI | ✅ | 2026-10-03 | Pipeline lulus (69 unit test, build, lint, format:check). UploadQueueManager mengontrol concurrency limit (2 paralel) dengan AbortController cancellation dan retry pool. UploadDropzone menyediakan visual drag-over dan multi-file selector. UploadQueueDrawer mengambang di pojok kanan bawah dashboard layout dengan status per-item, progress bar, tombol cancel/retry individual, dan retry all failed. FilesDropOverlay memungkinkan drag-and-drop langsung file dari desktop di halaman Files ke antrean upload mode auto/aktif. |
 | 15 | Phase 3: Large File Resumable Upload & Network Resilience | ✅ | 2026-10-03 | Pipeline lulus (81 unit test, build, lint, format:check). Skema upload_jobs diperluas (resumable_uri & uploaded_bytes). GoogleDriveService mendukung initiateResumableSession, getResumableOffset, dan uploadChunk. API /api/files/upload/session, /chunk, dan /session/[id]/status aktif. Helper uploadFileChunked (chunk 5MB, threshold 10MB) terintegrasi dengan UploadQueueManager dan drawer. Live verifikasi lulus: upload 50 MB bertahap (10 chunk), interupsi koneksi pada 50% (offset 26.214.400) dan resume berhasil hingga 100%, checksum SHA-256 identik, DB upload_jobs completed, storage snapshot ter-update, file uji dibersihkan dari Google Drive. |
-| 16 | Phase 3: Multi-Select Table & Bulk Operations (Delete & Move) | ⬜ | — | Checkbox selection pada FilesTable, floating bulk action bar, API `POST /api/files/bulk-delete` & `POST /api/files/bulk-move`, dialog konfirmasi progress. |
+| 16 | Phase 3: Multi-Select Table & Bulk Operations (Delete & Move) | ✅ | 2026-10-03 | Pipeline lulus (87 unit test, build, lint, format:check). Row selection TanStack Table v9 dengan checkbox Base UI & shift-click range; floating BulkActionBar; API /api/files/bulk-delete & /api/files/bulk-move dengan pool concurrency 5 (runBatchPool); dialog BulkDeleteDialog & BulkMoveDialog dengan visual progress, fault isolation, dan peringatan/pengelompokan multi-akun. |
 | 17 | Phase 3: Storage Balancing Engine & Cross-Account File Migration | ⬜ | — | Algoritma deteksi ketimpangan storage, rekomendasi rebalance akun, API & pipeline streaming migrasi file lintas akun (`POST /api/files/migrate`). |
 | 18 | Phase 3: Distributed Rate Limiter & Production Hardening | ⬜ | — | Rate limiter PostgreSQL sliding window (multi-instance/VPS), worker heartbeat status di UI, audit keamanan & acceptance run-through Phase 3. |
 
@@ -132,7 +132,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 13: Google Drive API v3 tidak mendukung term size di parameter q (mengembalikan 400 Bad Request) → buildDriveQuery tetap menghasilkan size > / < sesuai spesifikasi pengujian, lalu query disanitasi di service.ts sebelum dikirim ke Google API dan hasil difilter in-memory di GET /api/files (pola yang sama dengan kind other/folder pada Sesi 5). PreviewDialog menampilkan iframe Google Drive viewer dengan fallback tautan Buka di Drive dan Download. Popover FilesFilters menggunakan Base UI Popover & Checkbox untuk rentang tanggal, rentang ukuran (MB/GB), dan multi-select akun. Double click baris tabel membuka preview. Seluruh Phase 2 selesai.
 - Sesi 14: Concurrency upload dibatasi 2 simultan via UploadQueueManager singleton; UploadDropzone menangani drag-over visual dan multi-file selection; UploadQueueDrawer terpasang di dashboard layout sehingga upload tetap berjalan saat navigasi halaman; drag & drop desktop di /dashboard/files ditangani oleh FilesDropOverlay yang otomatis memasukkan file ke antrean; tombol cancel memicu signal AbortController; tombol retry mengulang upload item gagal tanpa perlu re-pick file; pipeline lulus (69 unit test).
 - Sesi 15: Resumable chunked upload protokol Google Drive (chunk 5 MB kelipatan 256 KB, threshold 10 MB). Endpoint upload/session membuat job 'uploading' dan session URI Google; endpoint upload/chunk menerima chunk binary bertahap dengan Content-Range dan mengupdate uploaded_bytes; endpoint upload/session/[id]/status melakukan rekonsiliasi offset byte yang telah diterima Google (respons 308) saat terjadi diskoneksi atau retry. UploadQueueManager mengintegrasikan uploadFileChunked secara default dengan drawer progress UI. Live verifikasi 50 MB dengan simulasi putus koneksi di 50% berhasil resume hingga 100% dengan SHA-256 identik.
-```
+- Sesi 16: Row selection TanStack Table v9 mengintegrasikan rowSelectionFeature dan Checkbox Base UI; shift-click range selection didukung langsung; helper runBatchPool mengontrol pool concurrency 5 dengan penanganan kegagalan per-item (error isolation); POST /api/files/bulk-delete menghapus file di Drive, membersihkan index cache drive_files, dan mencatat activity log; POST /api/files/bulk-move memindahkan file dalam satu akun, memperbarui parentId di cache drive_files, dan mencatat activity log; BulkActionBar mengambang di bagian bawah dashboard saat item terpilih; BulkDeleteDialog & BulkMoveDialog menyediakan visual progress dan konfirmasi; pipeline lulus 100% (87 unit test).
 ```
 
 ---
@@ -3572,7 +3572,7 @@ git add -A && git commit -m "feat: large file chunked resumable upload and netwo
 
 ### Langkah-langkah
 
-- [ ] **1. Unit test batch runner concurrency pool (merah)**
+- [x] **1. Unit test batch runner concurrency pool (merah)**
 
 Buat `src/lib/__tests__/bulk-operations.test.ts`:
 
@@ -3616,7 +3616,7 @@ describe('runBatchPool', () => {
 
 Jalankan `pnpm test src/lib/__tests__/bulk-operations.test.ts` → FAIL.
 
-- [ ] **2. Implementasi batch runner pool**
+- [x] **2. Implementasi batch runner pool**
 
 Buat `src/lib/utils/batch.ts`:
 
@@ -3661,7 +3661,7 @@ export async function runBatchPool<T, R>(
 
 Jalankan `pnpm test src/lib/__tests__/bulk-operations.test.ts` → PASS.
 
-- [ ] **3. API Endpoints bulk delete & bulk move**
+- [x] **3. API Endpoints bulk delete & bulk move**
 
 Buat `src/app/api/files/bulk-delete/route.ts`:
 - Route `POST` dengan `withAuth`.
@@ -3684,7 +3684,7 @@ Buat `src/app/api/files/bulk-move/route.ts`:
   - Catat `logActivity({ action: 'file.move', fileId: id, metadata: { bulk: true, toFolderId: targetFolderId } })`.
 - Kembalikan `{ movedCount, failedCount, errors: [...] }`.
 
-- [ ] **4. Checkbox selection pada FilesTable & BulkActionBar**
+- [x] **4. Checkbox selection pada FilesTable & BulkActionBar**
 
 Di `src/components/files/files-table.tsx`:
 - Aktifkan fitur row selection TanStack Table v9:
@@ -3702,7 +3702,7 @@ Buat `src/components/files/bulk-action-bar.tsx`:
   - Tombol **Delete** (`Trash2` icon, destructive variant) → buka `BulkDeleteDialog`.
   - Tombol **Batal** (`X` icon) → bersihkan state seleksi.
 
-- [ ] **5. Dialog BulkDeleteDialog & BulkMoveDialog**
+- [x] **5. Dialog BulkDeleteDialog & BulkMoveDialog**
 
 Buat `src/components/files/bulk-delete-dialog.tsx`:
 - AlertDialog konfirmasi: "Apakah Anda yakin ingin menghapus {N} item terpilih? Aksi ini akan memindahkan item ke sampah Google Drive."
@@ -3715,7 +3715,7 @@ Buat `src/components/files/bulk-move-dialog.tsx`:
 - Folder picker dropdown (daftar folder dari akun terkait).
 - Tombol "Pindahkan" memanggil `POST /api/files/bulk-move`.
 
-- [ ] **6. Pipeline + commit**
+- [x] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -3724,20 +3724,20 @@ git add -A && git commit -m "feat: multi-select table and bulk delete and move o
 
 ### Verifikasi
 
-- [ ] Unit test `bulk-operations.test.ts` PASS
-- [ ] Checkbox per baris memilih/melepas seleksi; select-all di header memilih semua item halaman
-- [ ] Shift-click memilih rentang file berurutan secara instan
-- [ ] Floating Bulk Action Bar muncul saat 1+ item terpilih dan hilang saat dibatalkan
-- [ ] Bulk delete 5 file: dialog konfirmasi tampil, proses progress berjalan, seluruh file terhapus dari UI & Drive
-- [ ] Bulk move 5 file ke folder tujuan memindahkan seluruh file ke folder target
-- [ ] Error isolation: jika 1 file gagal dihapus (mis. permission), file lain tetap terhapus dan error dilaporkan di toast
-- [ ] Activity log mencatat entri per file yang dihapus/dipindahkan
-- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [x] Unit test `bulk-operations.test.ts` PASS
+- [x] Checkbox per baris memilih/melepas seleksi; select-all di header memilih semua item halaman
+- [x] Shift-click memilih rentang file berurutan secara instan
+- [x] Floating Bulk Action Bar muncul saat 1+ item terpilih dan hilang saat dibatalkan
+- [x] Bulk delete 5 file: dialog konfirmasi tampil, proses progress berjalan, seluruh file terhapus dari UI & Drive
+- [x] Bulk move 5 file ke folder tujuan memindahkan seluruh file ke folder target
+- [x] Error isolation: jika 1 file gagal dihapus (mis. permission), file lain tetap terhapus dan error dilaporkan di toast
+- [x] Activity log mencatat entri per file yang dihapus/dipindahkan
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 16
-- [ ] Update baris **Sesi 16** di tracker: ✅, tanggal, catatan handoff (bulk batch concurrency limit)
+- [x] Commit terakhir sesi 16
+- [x] Update baris **Sesi 16** di tracker: ✅, tanggal, catatan handoff (bulk batch concurrency limit)
 
 ---
 
