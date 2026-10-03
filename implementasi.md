@@ -78,7 +78,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 9 | Phase 2: Move, Rename, Copy file | ✅ | 2026-10-03 | Pipeline lulus (40 unit test, build, lint, format:check). Rename & move (file/folder) via PATCH /api/files/[id] & /api/folders/[id], copy file via POST /api/files/[id]/copy, folder list via GET /api/folders. UI: DropdownMenu per baris dengan dialog Rename, Move (folder picker), Copy (file), dan Delete confirmation. Live curl terverifikasi: rename file/folder, move file ke folder & kembali ke root, copy file, delete folder, activity logs tercatat. Copy/move lintas akun belum didukung (hanya dalam 1 akun sesuai PRD Phase 2). |
 | 10 | Phase 2: Automatic account selection (Mode B) | ✅ | 2026-10-03 | Pipeline lulus (46 unit test, build, lint, format:check). Algoritma selectAccount (PRD §6.3) memilih akun dengan sisa ruang terbesar yang muat file. Upload API mendukung ?mode=auto dengan auto-quota sync & auto-selection. UploadDialog UI memiliki radio Automatic / Specific account dengan panel preview evaluasi kandidat per file (✅/❌) dan proteksi QUOTA_EXCEEDED. Live curl terverifikasi: auto upload ke akun terbesar, reject 413 file melebihi kapasitas seluruh akun, manual mode tetap berfungsi. |
 | 11 | Phase 2: Activity log page + Statistik storage/file | ✅ | 2026-10-03 | Pipeline lulus (52 unit test, build, lint, format:check). API /api/activity mendukung filter action, accountId, dan pagination; API /api/stats menyediakan ringkasan storage, fileKinds, snapshotHistory (AreaChart), dan actionCounts. Halaman /dashboard/activity (ActivityTable) dan /dashboard/stats (StatsCards + StatsCharts) berfungsi penuh; menu Stats ditambahkan ke sidebar; isolasi cross-user teruji aman; statistik bergantung pada kelengkapan index drive_files yang akan diperbarui oleh background sync di Sesi 12. |
-| 12 | Phase 2: Background sync (worker) + account health monitoring | ⬜ | | |
+| 12 | Phase 2: Background sync (worker) + account health monitoring | ✅ | 2026-10-03 | Pipeline lulus (61 unit test, build, lint, format:check). Worker src/worker/index.ts (quota 10m, health 30m, index 60m) beroperasi tanpa Redis; indexAccountFiles dengan paging hingga 2000 file; health check memantau konektivitas & menangani token expired (reconnect_required) serta recovery; Docker service worker terkonfigurasi di docker-compose.yml; panduan VPS (PM2/systemd) didokumentasikan di README; UI AccountsTable & Dashboard auto-refetch storage tiap 5 menit. |
 | 13 | Phase 2: Advanced search + file preview | ⬜ | | |
 
 **Log Sesi** (diisi bila ada keputusan penting lintas sesi):
@@ -123,6 +123,8 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 9: Rename, Move, Copy file dan Folder management selesai; aksi dapat diakses via DropdownMenu per baris tabel maupun dialog modal; move antar folder dan copy file beroperasi dalam 1 akun (lintas akun di luar scope Phase 2); activity logs mencatat file.rename, file.move, file.copy, file.delete, folder.create.
 - Sesi 10: Automatic account selection (Mode B) diimplementasikan di lib/upload/select-account.ts dan diintegrasikan ke POST /api/files/upload (?mode=auto) serta UploadDialog (radio destination + panel preview calon akun per file). Validasi mode auto tidak mewajibkan accountId. Sync quota dipanggil saat seleksi dan setelah upload selesai.
 - Sesi 11: Recharts dipasang untuk visualisasi statistik; `useSyncExternalStore` digunakan pada render chart client untuk menghindari hydration mismatch dan aturan react-hooks/set-state-in-effect; kalkulasi totals dan aggregasi file kinds diisolasi di `src/lib/stats.ts` dan dilindungi unit test; GET /api/activity mendukung filter action & accountId (dengan proteksi user_id) serta pagination; halaman /dashboard/activity dan /dashboard/stats aktif dengan visualisasi dan tabel lengkap; menu Stats ditambahkan ke Sidebar.
+- Sesi 12: Worker loop berjalan tanpa top-level await langsung pada format CJS (menggunakan startWorker().catch() dan guard !process.env.VITEST agar aman diimpor Vitest); Docker service worker berjalan dengan image node:22-alpine; indexAccountFiles melakukan upsert batch ke drive_files dengan paging Google Drive hingga 20 halaman (2.000 file/akun); checkAccountHealth memulihkan status ke connected jika kuota berhasil diambil dan mendeteksi ACCOUNT_DISCONNECTED menjadi reconnect_required; penanganan safe() menjamin kegagalan 1 akun tidak mematikan seluruh proses worker.
+```
 ```
 
 ---
@@ -3419,7 +3421,7 @@ git add -A && git commit -m "feat: activity log page and storage/file statistics
 
 ### Langkah-langkah
 
-- [ ] **1. Indexing helper**
+- [x] **1. Indexing helper**
 
 Buat `src/lib/google-drive/indexer.ts`:
 
@@ -3481,7 +3483,7 @@ export async function indexAccountFiles(account: GoogleAccount): Promise<number>
 
 (Impor `sql` dari `drizzle-orm`.)
 
-- [ ] **2. Health check**
+- [x] **2. Health check**
 
 Buat `src/lib/google/health.ts`:
 
@@ -3511,7 +3513,7 @@ export async function checkAccountHealth(account: GoogleAccount): Promise<Health
 }
 ```
 
-- [ ] **3. Worker loop**
+- [x] **3. Worker loop**
 
 Buat `src/worker/index.ts`:
 
@@ -3574,7 +3576,7 @@ setInterval(() => safe('index loop', indexAll), INDEX_INTERVAL_MS);
 
 Catatan: top-level await butuh ESM/tsx (sudah dipakai via `pnpm worker`).
 
-- [ ] **4. Docker service worker**
+- [x] **4. Docker service worker**
 
 Tambahkan ke `docker-compose.yml`:
 
@@ -3603,13 +3605,13 @@ Tambahkan ke `docker-compose.yml`:
 
 (Di VPS produksi lebih baik jalankan worker via systemd/pm2 `pnpm worker`; catat di README.)
 
-- [ ] **5. UI: status real-time**
+- [x] **5. UI: status real-time**
 
 - `AccountsTable`: `refetchInterval: 5 * 60_000` (bukan hanya manual), badge mengikuti `status` dari server (sudah ada).
 - Dashboard `['storage']` refekInterval serupa.
 - Tambahkan info kecil "Diperbarui otomatis tiap 10 menit" di header Accounts.
 
-- [ ] **6. Pipeline + commit**
+- [x] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -3618,17 +3620,17 @@ git add -A && git commit -m "feat: background worker for quota sync, health chec
 
 ### Verifikasi
 
-- [ ] `docker compose up -d worker` → log menampilkan `[worker] mulai` + hasil sync/index tanpa error
-- [ ] `select max(created_at) from storage_snapshots` bertambah dalam 10 menit (atau panggil `syncAllQuota` manual via `pnpm worker` sekali lalu hentikan)
-- [ ] Set refresh token 1 akun jadi rusak → dalam ≤30 menit statusnya `reconnect_required` (atau paksa dengan menjalankan health check manual)
-- [ ] `select count(*) from drive_files` naik signifikan setelah index loop (≥ 100 file bila Drive punya lebih)
-- [ ] Worker tidak meng-crash saat 1 akun gagal (log error, loop lanjut)
-- [ ] Pipeline lulus
+- [x] `docker compose up -d worker` → log menampilkan `[worker] mulai` + hasil sync/index tanpa error
+- [x] `select max(created_at) from storage_snapshots` bertambah dalam 10 menit (atau panggil `syncAllQuota` manual via `pnpm worker` sekali lalu hentikan)
+- [x] Set refresh token 1 akun jadi rusak → dalam ≤30 menit statusnya `reconnect_required` (atau paksa dengan menjalankan health check manual)
+- [x] `select count(*) from drive_files` naik signifikan setelah index loop (≥ 100 file bila Drive punya lebih)
+- [x] Worker tidak meng-crash saat 1 akun gagal (log error, loop lanjut)
+- [x] Pipeline lulus
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 12
-- [ ] Update baris **Sesi 12** di tracker: ✅, tanggal, catatan (interval, cara deploy worker di VPS)
+- [x] Commit terakhir sesi 12
+- [x] Update baris **Sesi 12** di tracker: ✅, tanggal, catatan (interval, cara deploy worker di VPS)
 
 ---
 

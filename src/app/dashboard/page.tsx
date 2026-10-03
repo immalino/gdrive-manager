@@ -26,6 +26,7 @@ export default function DashboardPage() {
   } = useQuery({
     queryKey: ['storage'],
     queryFn: () => api.get<StorageResponse>('/api/storage'),
+    refetchInterval: 5 * 60_000,
   });
 
   const {

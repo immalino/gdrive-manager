@@ -15,5 +15,26 @@ services:
       timeout: 3s
       retries: 10
 
+  worker:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm worker"
+    environment:
+      DATABASE_URL: postgresql://gdrive:gdrive@postgres:5432/gdrive_manager
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      APP_URL: ${APP_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata:

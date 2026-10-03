@@ -78,7 +78,7 @@ export function AccountsTable() {
   const { data, isPending, isError, error } = useQuery({
     queryKey: ['storage'],
     queryFn: () => api.get<StorageResponse>('/api/storage'),
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
   });
 
   const refreshMutation = useMutation({
@@ -102,16 +102,19 @@ export function AccountsTable() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end gap-2">
-        <Button
-          variant="outline"
-          disabled={refreshMutation.isPending}
-          onClick={() => refreshMutation.mutate()}
-        >
-          <RefreshCw className={refreshMutation.isPending ? 'animate-spin' : undefined} />
-          Refresh
-        </Button>
-        <AddAccountButton />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">Diperbarui otomatis tiap 10 menit</span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            disabled={refreshMutation.isPending}
+            onClick={() => refreshMutation.mutate()}
+          >
+            <RefreshCw className={refreshMutation.isPending ? 'animate-spin' : undefined} />
+            Refresh
+          </Button>
+          <AddAccountButton />
+        </div>
       </div>
 
       {connectError && (

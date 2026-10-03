@@ -95,6 +95,27 @@ pnpm dev
 
 Buka peramban di `http://localhost:3000`.
 
+### 7. Jalankan Background Worker (Sync, Health Check, Indexing)
+
+Worker berjalan sebagai proses terpisah yang melakukan sinkronisasi kuota (setiap 10 menit), pemantauan kesehatan koneksi akun (setiap 30 menit), dan pembaruan indeks cache `drive_files` (setiap 60 menit).
+
+- **Development / Lokal:**
+  ```bash
+  pnpm worker
+  ```
+  *(Tambahkan argumen `--once` untuk menjalankan satu putaran sinkronisasi lalu keluar: `pnpm worker --once`)*
+
+- **Docker Compose:**
+  ```bash
+  docker compose up -d worker
+  ```
+
+- **VPS Produksi:**
+  Di lingkungan VPS produksi, lebih direkomendasikan menjalankan worker via systemd atau PM2:
+  ```bash
+  pm2 start "pnpm worker" --name gdrive-worker
+  ```
+
 ---
 
 ## Konfigurasi Google OAuth 2.0
@@ -178,11 +199,13 @@ src/
 │   ├── errors.ts                     # Definisi AppError & ApiErrorCode
 │   ├── quota.ts                      # Sinkronisasi & snapshot kuota
 │   ├── activity.ts                   # Pencatatan log aktivitas sistem
-│   ├── google/                       # OAuth, token management, error mapping
-│   └── google-drive/                 # GoogleDriveService & query builder
+│   ├── google/                       # OAuth, token management, error mapping, health check
+│   └── google-drive/                 # GoogleDriveService, query builder, file indexer
 ├── db/
 │   ├── schema/                       # Skema tabel Drizzle ORM
 │   └── index.ts                      # Koneksi database Postgres
+├── worker/
+│   └── index.ts                      # Background worker (quota sync, health check, indexer)
 └── types/                            # Antarmuka DTO bersama
 ```
 
