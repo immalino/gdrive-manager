@@ -1,9 +1,16 @@
 import type { GoogleAccount } from '@/db/schema';
 import { mapGoogleError } from '@/lib/google/errors';
 import { getValidAccessToken } from '@/lib/google/tokens';
-import type { DriveQuota } from './types';
+import type { DriveFileDto, DriveQuota } from './types';
 
 const API_BASE = 'https://www.googleapis.com/drive/v3';
+
+interface ListOptions {
+  q?: string;
+  pageSize?: number;
+  pageToken?: string;
+  orderBy?: string;
+}
 
 export class GoogleDriveService {
   constructor(
@@ -36,14 +43,49 @@ export class GoogleDriveService {
     };
   }
 
-  async listFiles(): Promise<never> {
-    throw new Error('listFiles diimplementasi di Sesi 5');
+  async listFiles(
+    options: ListOptions = {},
+  ): Promise<{ files: DriveFileDto[]; nextPageToken: string | null }> {
+    const params = new URLSearchParams({
+      q: options.q ?? 'trashed = false',
+      pageSize: String(options.pageSize ?? 100),
+      fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,parents,webViewLink)',
+      orderBy: options.orderBy ?? 'modifiedTime desc',
+      spaces: 'drive',
+    });
+    if (options.pageToken) params.set('pageToken', options.pageToken);
+    const res = await this.request(`/files?${params.toString()}`);
+    const body = (await res.json()) as {
+      nextPageToken?: string;
+      files?: Array<{
+        id: string;
+        name: string;
+        mimeType: string;
+        size?: string;
+        modifiedTime?: string;
+        parents?: string[];
+        webViewLink?: string;
+      }>;
+    };
+    const files: DriveFileDto[] = (body.files ?? []).map((f) => ({
+      id: f.id,
+      name: f.name,
+      mimeType: f.mimeType,
+      sizeBytes: f.size ? Number(f.size) : null,
+      modifiedAt: f.modifiedTime ?? null,
+      parentId: f.parents?.[0] ?? null,
+      webViewLink: f.webViewLink ?? null,
+      accountId: this.account.id,
+      accountEmail: this.account.email,
+    }));
+    return { files, nextPageToken: body.nextPageToken ?? null };
   }
+
   async uploadFile(): Promise<never> {
     throw new Error('uploadFile diimplementasi di Sesi 6');
   }
-  async downloadFile(): Promise<never> {
-    throw new Error('downloadFile diimplementasi di Sesi 6');
+  async downloadFile(fileId?: string): Promise<never> {
+    throw new Error(`downloadFile diimplementasi di Sesi 6 (fileId=${fileId ?? '-'})`);
   }
   async deleteFile(): Promise<never> {
     throw new Error('deleteFile diimplementasi di Sesi 6');

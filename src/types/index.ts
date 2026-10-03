@@ -1,3 +1,5 @@
+import type { DriveFileDto } from '@/lib/google-drive/types';
+
 export type AccountStatus = 'connected' | 'reconnect_required' | 'error';
 
 export interface StorageQuota {
@@ -30,4 +32,9 @@ export interface StorageResponse {
     accountCount: number;
   };
   accounts: StorageAccountItem[];
+}
+
+export interface FilesResponse {
+  files: DriveFileDto[];
+  failedAccounts: string[];
 }
