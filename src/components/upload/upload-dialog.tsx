@@ -18,6 +18,7 @@ import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { api } from '@/lib/api-client';
 import { formatBytes } from '@/lib/format';
+import { selectAccount } from '@/lib/upload/select-account';
 import type { StorageResponse } from '@/types';
 
 class UploadError extends Error {
@@ -87,6 +88,7 @@ interface UploadDialogProps {
 
 export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const queryClient = useQueryClient();
+  const [destinationMode, setDestinationMode] = useState<'auto' | 'manual'>('auto');
   const [files, setFiles] = useState<File[]>([]);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -107,16 +109,35 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   const selectedAccount = accounts.find((a) => a.id === activeAccountId) ?? null;
 
   const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-  const tooLarge = files.find(
+
+  const manualTooLarge = files.find(
     (f) => selectedAccount?.freeBytes != null && f.size > selectedAccount.freeBytes,
   );
-  const quotaError =
-    tooLarge && selectedAccount
-      ? `File ${tooLarge.name} (${formatBytes(tooLarge.size)}) melebihi sisa ruang ${selectedAccount.email} (${formatBytes(selectedAccount.freeBytes)}).`
+  const manualQuotaError =
+    manualTooLarge && selectedAccount
+      ? `File ${manualTooLarge.name} (${formatBytes(manualTooLarge.size)}) melebihi sisa ruang ${selectedAccount.email} (${formatBytes(selectedAccount.freeBytes)}).`
       : null;
 
+  const autoUnfitFile =
+    destinationMode === 'auto' && files.length > 0
+      ? files.find((f) => !selectAccount(f.size, connected))
+      : null;
+  const autoQuotaError =
+    destinationMode === 'auto' && files.length > 0 && connected.length === 0
+      ? 'Belum ada akun terhubung dengan ruang penyimpanan.'
+      : autoUnfitFile
+        ? `QUOTA_EXCEEDED: Tidak ada akun dengan ruang cukup untuk file ${autoUnfitFile.name} (${formatBytes(autoUnfitFile.size)}).`
+        : null;
+
+  const quotaError = destinationMode === 'auto' ? autoQuotaError : manualQuotaError;
+
   const isUploading = progress !== null;
-  const canUpload = Boolean(files.length > 0 && selectedAccount && !quotaError && !isUploading);
+  const canUpload = Boolean(
+    files.length > 0 &&
+    !quotaError &&
+    !isUploading &&
+    (destinationMode === 'auto' ? connected.length > 0 : selectedAccount),
+  );
   const currentFile = currentIndex != null ? (files[currentIndex] ?? null) : null;
 
   function reset() {
@@ -126,6 +147,7 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
     setProgress(null);
     setCurrentIndex(null);
     setError(null);
+    setDestinationMode('auto');
     if (inputRef.current) inputRef.current.value = '';
   }
 
@@ -135,13 +157,19 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
   }
 
   async function handleUpload() {
-    if (files.length === 0 || !selectedAccount || quotaError || isUploading) return;
+    if (files.length === 0 || quotaError || isUploading) return;
+    if (destinationMode === 'manual' && !selectedAccount) return;
+    if (destinationMode === 'auto' && connected.length === 0) return;
+
     setError(null);
     for (let i = 0; i < files.length; i++) {
       const file = files[i]!;
       setCurrentIndex(i);
       setProgress(0);
-      const url = `/api/files/upload?accountId=${encodeURIComponent(selectedAccount.id)}&filename=${encodeURIComponent(file.name)}`;
+      const url =
+        destinationMode === 'auto'
+          ? `/api/files/upload?mode=auto&filename=${encodeURIComponent(file.name)}`
+          : `/api/files/upload?mode=manual&accountId=${encodeURIComponent(selectedAccount!.id)}&filename=${encodeURIComponent(file.name)}`;
       const { promise, xhr } = startUpload(url, file, setProgress);
       xhrRef.current = xhr;
       try {
@@ -164,10 +192,14 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
         xhrRef.current = null;
       }
     }
+    const targetEmail =
+      destinationMode === 'auto'
+        ? selectAccount(files[0]!.size, connected)?.email
+        : selectedAccount?.email;
     const message =
       files.length === 1
-        ? `File ${files[0]!.name} diupload ke ${selectedAccount.email}.`
-        : `${files.length} file diupload ke ${selectedAccount.email}.`;
+        ? `File ${files[0]!.name} diupload ke ${targetEmail ?? 'Drive'}.`
+        : `${files.length} file diupload ke ${targetEmail ?? 'Drive'}.`;
     toast.success(message);
     queryClient.invalidateQueries({ queryKey: ['files'] });
     queryClient.invalidateQueries({ queryKey: ['storage'] });
@@ -180,8 +212,8 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
         <DialogHeader>
           <DialogTitle>Upload file</DialogTitle>
           <DialogDescription>
-            Pilih file dan akun tujuan (Mode A — manual). Banyak file dikirim berurutan, satu
-            request per file.
+            Pilih file dan tujuan upload (Mode A — manual atau Mode B — otomatis). Banyak file
+            dikirim berurutan, satu request per file.
           </DialogDescription>
         </DialogHeader>
 
@@ -215,7 +247,88 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
             </p>
           </div>
 
-          {connected.length === 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Upload destination:</p>
+            <RadioGroup
+              value={destinationMode}
+              onValueChange={(val) => setDestinationMode(val as 'auto' | 'manual')}
+              className="grid grid-cols-2 gap-2"
+            >
+              <label
+                className={cn(
+                  'flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm transition-colors',
+                  destinationMode === 'auto'
+                    ? 'border-primary bg-primary/5 font-medium'
+                    : 'border-border hover:bg-muted/50',
+                )}
+              >
+                <RadioGroupItem value="auto" disabled={isUploading} />
+                <span>Automatic</span>
+              </label>
+              <label
+                className={cn(
+                  'flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm transition-colors',
+                  destinationMode === 'manual'
+                    ? 'border-primary bg-primary/5 font-medium'
+                    : 'border-border hover:bg-muted/50',
+                )}
+              >
+                <RadioGroupItem value="manual" disabled={isUploading} />
+                <span>Specific account</span>
+              </label>
+            </RadioGroup>
+          </div>
+
+          {destinationMode === 'auto' ? (
+            connected.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Belum ada akun terhubung. Tambahkan akun Google terlebih dahulu.
+              </p>
+            ) : files.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">
+                Pilih file untuk melihat pemilihan akun otomatis.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {files.map((file, idx) => {
+                  const picked = selectAccount(file.size, connected);
+                  return (
+                    <div key={idx} className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                      <p className="font-medium text-foreground">
+                        File: {file.name} ({formatBytes(file.size)})
+                      </p>
+                      <div className="space-y-1">
+                        {connected.map((account) => {
+                          const isEligible =
+                            account.freeBytes != null && account.freeBytes >= file.size;
+                          return (
+                            <div
+                              key={account.id}
+                              className="flex items-center justify-between text-xs text-muted-foreground"
+                            >
+                              <span>
+                                {account.email} — Free: {formatBytes(account.freeBytes)}
+                              </span>
+                              <span className="font-semibold">{isEligible ? '✅' : '❌'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {picked ? (
+                        <p className="border-t border-border/50 pt-1.5 text-xs font-medium text-emerald-500">
+                          → Upload ke {picked.email}
+                        </p>
+                      ) : (
+                        <p className="border-t border-border/50 pt-1.5 text-xs font-medium text-destructive">
+                          Tidak ada akun dengan ruang cukup untuk file ini.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : connected.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Belum ada akun terhubung. Tambahkan akun Google terlebih dahulu.
             </p>
@@ -284,7 +397,12 @@ export function UploadDialog({ open, onOpenChange }: UploadDialogProps) {
               <div className="flex justify-between gap-3 text-xs text-muted-foreground">
                 <span className="truncate">
                   Mengupload file {currentIndex != null ? currentIndex + 1 : 1}/{files.length} —{' '}
-                  {currentFile?.name} ke {selectedAccount?.email}
+                  {currentFile?.name}
+                  {destinationMode === 'auto'
+                    ? currentFile && selectAccount(currentFile.size, connected)
+                      ? ` ke ${selectAccount(currentFile.size, connected)?.email}`
+                      : ''
+                    : ` ke ${selectedAccount?.email}`}
                 </span>
                 <span className="shrink-0">{progress}%</span>
               </div>

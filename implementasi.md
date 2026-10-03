@@ -76,7 +76,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 7 | Dashboard storage + recent files/activity + global search | ✅ | 2026-10-03 | Pipeline lulus (30 unit test, typecheck, lint, build). Komponen dashboard (StorageOverview, AccountList, RecentFiles, RecentActivity, QuickActions) terpasang di /dashboard via TanStack Query. Endpoint `GET /api/activity` + dukungan `?recent=1` di `GET /api/files` (8 file terbaru lintas akun). Header search form navigasi ke `/dashboard/files?search=...`, tersinkronisasi dua arah dengan `FilesTable` via `useSearchParams` (di dalam `Suspense`). Responsive diuji (teks tombol header sembunyi pada layar kecil). `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 8 | Error handling, health status, keamanan, responsive, acceptance MVP | ✅ | 2026-10-03 | Pipeline lulus (33 unit test, build, lint, format:check). Async `mapGoogleError`, error boundary global + dashboard, status health badge + reconnect button, rate limit mutasi 30/min, audit keamanan lulus 100%, `pnpm format` merapikan seluruh file (DoD format:check bersih), README.md lengkap + acceptance MVP checklist tercentang. MVP Selesai. |
 | 9 | Phase 2: Move, Rename, Copy file | ✅ | 2026-10-03 | Pipeline lulus (40 unit test, build, lint, format:check). Rename & move (file/folder) via PATCH /api/files/[id] & /api/folders/[id], copy file via POST /api/files/[id]/copy, folder list via GET /api/folders. UI: DropdownMenu per baris dengan dialog Rename, Move (folder picker), Copy (file), dan Delete confirmation. Live curl terverifikasi: rename file/folder, move file ke folder & kembali ke root, copy file, delete folder, activity logs tercatat. Copy/move lintas akun belum didukung (hanya dalam 1 akun sesuai PRD Phase 2). |
-| 10 | Phase 2: Automatic account selection (Mode B) | ⬜ | | |
+| 10 | Phase 2: Automatic account selection (Mode B) | ✅ | 2026-10-03 | Pipeline lulus (46 unit test, build, lint, format:check). Algoritma selectAccount (PRD §6.3) memilih akun dengan sisa ruang terbesar yang muat file. Upload API mendukung ?mode=auto dengan auto-quota sync & auto-selection. UploadDialog UI memiliki radio Automatic / Specific account dengan panel preview evaluasi kandidat per file (✅/❌) dan proteksi QUOTA_EXCEEDED. Live curl terverifikasi: auto upload ke akun terbesar, reject 413 file melebihi kapasitas seluruh akun, manual mode tetap berfungsi. |
 | 11 | Phase 2: Activity log page + Statistik storage/file | ⬜ | | |
 | 12 | Phase 2: Background sync (worker) + account health monitoring | ⬜ | | |
 | 13 | Phase 2: Advanced search + file preview | ⬜ | | |
@@ -121,7 +121,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 7: Header search menggunakan pattern Suspense container dengan key={currentSearch} agar reset state search sinkron tanpa melanggar aturan react-hooks/set-state-in-effect; FilesTable tersinkronisasi via lastUrlSearchRef untuk menghindari overwrite saat user mengetik di tabel.
 - Sesi 8: `mapGoogleError` diubah jadi async (mengurai reason dari clone JSON Google API); error boundary `src/app/dashboard/error.tsx` dan `src/app/error.tsx` dibuat; `api/storage` menyertakan `updatedAt` untuk kolom baru di `AccountsTable`; badge status diperbarui (connected = secondary, reconnect_required = amber, error = destructive) dengan tombol Reconnect; rate limit mutasi (30 req/min/user) dipasang di seluruh route mutasi; tombol Refresh di Header dihubungkan ke mutation refresh; `pnpm format` merapikan seluruh file lama sehingga `pnpm format:check` lulus 100%; audit keamanan 6 poin lulus; README.md ditulis lengkap beserta Acceptance Criteria MVP.
 - Sesi 9: Rename, Move, Copy file dan Folder management selesai; aksi dapat diakses via DropdownMenu per baris tabel maupun dialog modal; move antar folder dan copy file beroperasi dalam 1 akun (lintas akun di luar scope Phase 2); activity logs mencatat file.rename, file.move, file.copy, file.delete, folder.create.
-- Sesi 9 (bugfix): `listFolders` awalnya membatasi ke `'root' in parents` bila `parentId` kosong sehingga akun dengan folder bersarang/nested (ribuan folder) hanya menampilkan root; batasan root dilepas bila `parentId` tidak dispesifikasikan (mengambil seluruh folder non-trashed), ditambah dukungan query search di endpoint dan filter input di dialog Move & Copy.
+- Sesi 10: Automatic account selection (Mode B) diimplementasikan di lib/upload/select-account.ts dan diintegrasikan ke POST /api/files/upload (?mode=auto) serta UploadDialog (radio destination + panel preview calon akun per file). Validasi mode auto tidak mewajibkan accountId. Sync quota dipanggil saat seleksi dan setelah upload selesai.
 ```
 
 ---
@@ -3098,7 +3098,7 @@ git add -A && git commit -m "feat: move, rename, copy file and folder operations
 
 ### Langkah-langkah
 
-- [ ] **1. Test algoritma (merah)**
+- [x] **1. Test algoritma (merah)**
 
 Buat `src/lib/__tests__/select-account.test.ts`:
 
@@ -3137,7 +3137,7 @@ describe('selectAccount', () => {
 
 `pnpm test` → FAIL.
 
-- [ ] **2. Implementasi algoritma**
+- [x] **2. Implementasi algoritma**
 
 Buat `src/lib/upload/select-account.ts`:
 
@@ -3160,7 +3160,7 @@ export function selectAccount<T extends AccountCandidate>(fileSize: number, acco
 
 `pnpm test` → PASS.
 
-- [ ] **3. Upload API mendukung mode auto**
+- [x] **3. Upload API mendukung mode auto**
 
 Di `src/app/api/files/upload/route.ts`, setelah rate limit dan sebelum cek quota, sisipkan resolusi akun:
 
@@ -3186,7 +3186,7 @@ if (mode === 'auto') {
 
 Lalu gunakan `resolvedAccountId` untuk `getAccountForUser` (dan buang cek quota manual kedua yang duplikat — syncQuota sudah dipanggil saat seleksi; untuk mode manual tetap sync + cek seperti Sesi 6).
 
-- [ ] **4. UI UploadDialog Mode B**
+- [x] **4. UI UploadDialog Mode B**
 
 Di `src/components/upload/upload-dialog.tsx`:
 - RadioGroup **Upload destination**: `● Automatic` / `○ Specific account`.
@@ -3204,7 +3204,7 @@ account2@gmail.com — Free: 10.3 GB  ✅
 - Kirim: `mode=auto` tanpa `accountId`, atau `mode=manual&accountId=...`.
 - Setelah sukses, invalidasi `['storage']` (free space akun tujuan berubah).
 
-- [ ] **5. Pipeline + commit**
+- [x] **5. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -3213,17 +3213,17 @@ git add -A && git commit -m "feat: automatic account selection for uploads (mode
 
 ### Verifikasi
 
-- [ ] `pnpm test` → 4 test `selectAccount` PASS (termasuk contoh PRD)
-- [ ] Mode Automatic, file kecil → terpilih akun dengan free terbesar (cek logika preview UI == yang dipakai API)
-- [ ] Mode Automatic, file lebih besar dari total free semua akun → ditolak dengan pesan jelas
-- [ ] Upload selesai → free space akun tujuan berkurang di dashboard (snapshot terbaru)
-- [ ] Mode Specific account tetap berfungsi seperti Sesi 6
-- [ ] Pipeline lulus
+- [x] `pnpm test` → 4 test `selectAccount` PASS (termasuk contoh PRD)
+- [x] Mode Automatic, file kecil → terpilih akun dengan free terbesar (cek logika preview UI == yang dipakai API)
+- [x] Mode Automatic, file lebih besar dari total free semua akun → ditolak dengan pesan jelas
+- [x] Upload selesai → free space akun tujuan berkurang di dashboard (snapshot terbaru)
+- [x] Mode Specific account tetap berfungsi seperti Sesi 6
+- [x] Pipeline lulus
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 10
-- [ ] Update baris **Sesi 10** di tracker: ✅, tanggal, catatan
+- [x] Commit terakhir sesi 10
+- [x] Update baris **Sesi 10** di tracker: ✅, tanggal, catatan
 
 ---
 
