@@ -75,7 +75,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 6 | Upload (manual, single-account), download, delete, folder, rate limit | ✅ | 2026-10-03 | Mode A (akun dipilih manual); upload resumable streaming 1 file/request, multi-file = loop berurutan tanpa paralel. Deviasi plan: endpoint resumable pakai `UPLOAD_BASE` baru (`https://www.googleapis.com/upload/drive/v3`) karena snippet plan menghasilkan 404; `content-length` download hanya diteruskan bila valid (nilai kosong → respons rusak). Rate limit in-memory per proses 10/menit/user. Live curl: upload 20 MB `201` (snapshot `used_bytes` +20.971.520), kelebihan kuota `413 QUOTA_EXCEEDED`, request ke-11 `429` + `retry-after: 60`, download PDF/Doc-native/file 20 MB identik, delete 3 objek + create folder OK, `account.disconnect` diuji via akun dummy (`account.connect` butuh OAuth browser → belum ada barisnya; panggilan sudah ada di callback). Tanpa browser headless: progress bar + dialog Upload/New Folder/Delete tak diverifikasi visual. `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 7 | Dashboard storage + recent files/activity + global search | ✅ | 2026-10-03 | Pipeline lulus (30 unit test, typecheck, lint, build). Komponen dashboard (StorageOverview, AccountList, RecentFiles, RecentActivity, QuickActions) terpasang di /dashboard via TanStack Query. Endpoint `GET /api/activity` + dukungan `?recent=1` di `GET /api/files` (8 file terbaru lintas akun). Header search form navigasi ke `/dashboard/files?search=...`, tersinkronisasi dua arah dengan `FilesTable` via `useSearchParams` (di dalam `Suspense`). Responsive diuji (teks tombol header sembunyi pada layar kecil). `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 8 | Error handling, health status, keamanan, responsive, acceptance MVP | ✅ | 2026-10-03 | Pipeline lulus (33 unit test, build, lint, format:check). Async `mapGoogleError`, error boundary global + dashboard, status health badge + reconnect button, rate limit mutasi 30/min, audit keamanan lulus 100%, `pnpm format` merapikan seluruh file (DoD format:check bersih), README.md lengkap + acceptance MVP checklist tercentang. MVP Selesai. |
-| 9 | Phase 2: Move, Rename, Copy file | ⬜ | | |
+| 9 | Phase 2: Move, Rename, Copy file | ✅ | 2026-10-03 | Pipeline lulus (40 unit test, build, lint, format:check). Rename & move (file/folder) via PATCH /api/files/[id] & /api/folders/[id], copy file via POST /api/files/[id]/copy, folder list via GET /api/folders. UI: DropdownMenu per baris dengan dialog Rename, Move (folder picker), Copy (file), dan Delete confirmation. Live curl terverifikasi: rename file/folder, move file ke folder & kembali ke root, copy file, delete folder, activity logs tercatat. Copy/move lintas akun belum didukung (hanya dalam 1 akun sesuai PRD Phase 2). |
 | 10 | Phase 2: Automatic account selection (Mode B) | ⬜ | | |
 | 11 | Phase 2: Activity log page + Statistik storage/file | ⬜ | | |
 | 12 | Phase 2: Background sync (worker) + account health monitoring | ⬜ | | |
@@ -120,6 +120,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 6 (bugfix UI): konten dialog melebihi parent saat upload (baris progress `truncate`/nowrap → min-content ratusan px membengkakkan track grid `DialogContent` yang tak punya `min-w-0`) → ditambah `[&>*]:min-w-0` di `DialogContent` dan `AlertDialogContent`/`AlertDialogHeader` (grid item default `min-width:auto` = min-content; `min-w-0` melepas automatic minimum size sehingga track selebar kontainer dan truncate bekerja).
 - Sesi 7: Header search menggunakan pattern Suspense container dengan key={currentSearch} agar reset state search sinkron tanpa melanggar aturan react-hooks/set-state-in-effect; FilesTable tersinkronisasi via lastUrlSearchRef untuk menghindari overwrite saat user mengetik di tabel.
 - Sesi 8: `mapGoogleError` diubah jadi async (mengurai reason dari clone JSON Google API); error boundary `src/app/dashboard/error.tsx` dan `src/app/error.tsx` dibuat; `api/storage` menyertakan `updatedAt` untuk kolom baru di `AccountsTable`; badge status diperbarui (connected = secondary, reconnect_required = amber, error = destructive) dengan tombol Reconnect; rate limit mutasi (30 req/min/user) dipasang di seluruh route mutasi; tombol Refresh di Header dihubungkan ke mutation refresh; `pnpm format` merapikan seluruh file lama sehingga `pnpm format:check` lulus 100%; audit keamanan 6 poin lulus; README.md ditulis lengkap beserta Acceptance Criteria MVP.
+- Sesi 9: Rename, Move, Copy file dan Folder management selesai; aksi dapat diakses via DropdownMenu per baris tabel maupun dialog modal; move antar folder dan copy file beroperasi dalam 1 akun (lintas akun di luar scope Phase 2); activity logs mencatat file.rename, file.move, file.copy, file.delete, folder.create.
 ```
 
 ---
@@ -2857,7 +2858,7 @@ git add -A && git commit -m "feat: error handling, account health, rate limits, 
 
 ### Langkah-langkah
 
-- [ ] **1. Test helper move (merah)**
+- [x] **1. Test helper move (merah)**
 
 Buat `src/lib/__tests__/move-params.test.ts`:
 
@@ -2880,7 +2881,7 @@ describe('buildMoveParams', () => {
 
 `pnpm test` → FAIL.
 
-- [ ] **2. Helper + method service**
+- [x] **2. Helper + method service**
 
 Buat `src/lib/files/move-params.ts`:
 
@@ -2950,7 +2951,7 @@ async listFolders(parentId?: string): Promise<Array<{ id: string; name: string }
 }
 ```
 
-- [ ] **3. API endpoints**
+- [x] **3. API endpoints**
 
 `src/app/api/files/[id]/route.ts` — tambahkan `PATCH`:
 
@@ -3033,7 +3034,7 @@ export const DELETE = withAuth<Ctx>(async (user, req, ctx) => {
 });
 ```
 
-- [ ] **4. UI: Rename / Move / Copy**
+- [x] **4. UI: Rename / Move / Copy**
 
 Di `src/components/files/file-actions.tsx`:
 - **Rename** → Dialog (Input prefilled nama) → `api.patch('/api/files/{id}?accountId=', { name })` → invalidasi `['files']`.
@@ -3055,7 +3056,7 @@ export const GET = withAuth(async (user, req) => {
 });
 ```
 
-- [ ] **5. Pipeline + commit**
+- [x] **5. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -3064,18 +3065,18 @@ git add -A && git commit -m "feat: move, rename, copy file and folder operations
 
 ### Verifikasi
 
-- [ ] `pnpm test` → test `buildMoveParams` PASS
-- [ ] Rename file → nama berubah di tabel dan di Drive web
-- [ ] Move file ke folder lain (akun sama) → pindah; kembali ke Root → pindah
-- [ ] Copy file → muncul 2 salinan, aslinya utuh
-- [ ] Hapus folder kosong → hilang; folder berisi → konfirmasi keras muncul dulu
-- [ ] `select action, count(*) from activity_logs group by action` → `file.rename`, `file.move`, `file.copy` bertambah
-- [ ] Pipeline lulus
+- [x] `pnpm test` → test `buildMoveParams` PASS
+- [x] Rename file → nama berubah di tabel dan di Drive web
+- [x] Move file ke folder lain (akun sama) → pindah; kembali ke Root → pindah
+- [x] Copy file → muncul 2 salinan, aslinya utuh
+- [x] Hapus folder kosong → hilang; folder berisi → konfirmasi keras muncul dulu
+- [x] `select action, count(*) from activity_logs group by action` → `file.rename`, `file.move`, `file.copy` bertambah
+- [x] Pipeline lulus
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 9
-- [ ] Update baris **Sesi 9** di tracker: ✅, tanggal, catatan (mis. "copy lintas akun belum didukung — hanya dalam 1 akun")
+- [x] Commit terakhir sesi 9
+- [x] Update baris **Sesi 9** di tracker: ✅, tanggal, catatan (mis. "copy lintas akun belum didukung — hanya dalam 1 akun")
 
 ---
 
