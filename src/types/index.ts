@@ -31,14 +31,3 @@ export interface StorageResponse {
   };
   accounts: StorageAccountItem[];
 }
-
-export interface StorageSnapshotsResponse {
-  snapshots: {
-    id: string;
-    googleAccountId: string;
-    totalBytes: number | null;
-    usedBytes: number;
-    freeBytes: number | null;
-    createdAt: string;
-  }[];
-}

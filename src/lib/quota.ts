@@ -49,3 +49,12 @@ export async function latestSnapshot(accountId: string): Promise<StorageSnapshot
     .limit(1);
   return row ?? null;
 }
+
+export async function recentSnapshots(accountId: string, limit = 60): Promise<StorageSnapshot[]> {
+  return db
+    .select()
+    .from(storageSnapshots)
+    .where(eq(storageSnapshots.googleAccountId, accountId))
+    .orderBy(desc(storageSnapshots.createdAt))
+    .limit(limit);
+}
