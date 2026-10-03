@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
     tokens = await exchangeCode(code);
     info = await fetchUserInfo(tokens.access_token);
   } catch (error) {
-    console.error('[google-callback] exchange gagal:', error instanceof Error ? error.message : error);
+    console.error(
+      '[google-callback] exchange gagal:',
+      error instanceof Error ? error.message : error,
+    );
     return failRedirect(req, 'exchange_failed');
   }
 
@@ -71,7 +74,18 @@ export async function GET(req: NextRequest) {
     if (!existing) {
       return failRedirect(req, 'no_refresh_token');
     }
-    [row] = await db.update(googleAccounts).set(values).where(eq(googleAccounts.id, existing.id)).returning();
+    [row] = await db
+      .update(googleAccounts)
+      .set(values)
+      .where(eq(googleAccounts.id, existing.id))
+      .returning();
+  }
+
+  try {
+    const { syncQuota } = await import('@/lib/quota');
+    await syncQuota(row!);
+  } catch (error) {
+    console.warn('[callback] sync quota gagal', error instanceof Error ? error.message : error);
   }
 
   const res = NextResponse.redirect(new URL(`/dashboard/accounts?connected=${row!.id}`, req.url));

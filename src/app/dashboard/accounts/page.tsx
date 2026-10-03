@@ -1,4 +1,6 @@
-import { Card, CardContent } from '@/components/ui/card';
+import { Suspense } from 'react';
+import { AccountsTable } from '@/components/accounts/accounts-table';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AccountsPage() {
   return (
@@ -7,11 +9,9 @@ export default function AccountsPage() {
         <h1 className="text-xl font-semibold tracking-tight">Accounts</h1>
         <p className="text-sm text-muted-foreground">Kelola akun Google Drive yang terhubung.</p>
       </div>
-      <Card>
-        <CardContent className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-          Belum ada akun terhubung.
-        </CardContent>
-      </Card>
+      <Suspense fallback={<Skeleton className="h-40" />}>
+        <AccountsTable />
+      </Suspense>
     </div>
   );
 }

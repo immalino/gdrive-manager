@@ -9,3 +9,36 @@ export interface StorageQuota {
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
+
+export interface StorageAccountItem {
+  id: string;
+  email: string;
+  name: string | null;
+  picture: string | null;
+  status: AccountStatus;
+  totalBytes: number | null;
+  usedBytes: number;
+  freeBytes: number | null;
+  snapshotAt: string | null;
+}
+
+export interface StorageResponse {
+  totals: {
+    totalBytes: number | null;
+    usedBytes: number;
+    freeBytes: number | null;
+    accountCount: number;
+  };
+  accounts: StorageAccountItem[];
+}
+
+export interface StorageSnapshotsResponse {
+  snapshots: {
+    id: string;
+    googleAccountId: string;
+    totalBytes: number | null;
+    usedBytes: number;
+    freeBytes: number | null;
+    createdAt: string;
+  }[];
+}
