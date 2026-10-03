@@ -70,7 +70,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 1 | Foundation: Next.js, Docker Postgres, Drizzle schema, shell UI | ✅ | 2026-10-02 | Lint memakai `eslint` CLI (lihat Log Sesi). UserMenu di header masih slot kosong (diisi Sesi 2). `FileKind` tidak dibuat sesuai rencana (Sesi 5). Verifikasi browser dilakukan via curl terhadap HTML SSR + log `next dev` (environment tanpa browser headless). |
 | 2 | Auth aplikasi (Better Auth) + proteksi route | ✅ | 2026-10-02 | `withAuth`/`ok`/`errorResponse` sudah tersedia tapi belum dipakai route mana pun (mulai Sesi 3). `Header` kini mewajibkan prop `user` (diisi guard `dashboard/layout.tsx`). Verifikasi browser dilakukan via curl terhadap SSR HTML + API (environment tanpa browser headless). |
 | 3 | Enkripsi token + Google OAuth connect/disconnect + API accounts | ✅ | 2026-10-02 | Selesai; verifikasi lulus termasuk live OAuth (2 akun terhubung, token tersimpan `v1.`, status `connected`, cascade DELETE teruji). Scope `auth/drive` penuh. App Google masih **Testing** → hanya email *test user* yang boleh connect (lainnya 403 `access_denied`) dan refresh token kadaluarsa 7 hari — publish ke Production untuk pemakaian panjang. `logActivity` dikomentari → aktifkan di Sesi 6. Halaman `/dashboard/accounts` masih placeholder → tabel diisi Sesi 4. |
-| 4 | GoogleDriveService (quota) + sinkronisasi quota + halaman Accounts | ⬜ | | |
+| 4 | GoogleDriveService (quota) + sinkronisasi quota + halaman Accounts | ✅ | 2026-10-03 | Pipeline lulus + 11 unit test baru (fetch-mocked quota & `mapGoogleError`). Live curl: `POST /api/accounts/refresh` sukses 2 akun (snapshot `0→2→4`; token kedaluwarsa → auto-refresh lewat `getValidAccessToken`), struktur `/api/storage` benar, riwayat `/api/accounts/[id]/storage` OK, disconnect cascade OK, tanpa cookie 401, tidak ada token di log dev. Tanpa browser headless: toast `?connected=` + render tabel setelah hydration tak diverifikasi visual (SSR menampilkan skeleton; data dari API teruji). Password `tes1@example.com` direset ke `Sesi4Verify!` demi verifikasi curl. `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 5 | List/search file lintas akun + index cache `drive_files` + halaman Files | ⬜ | | |
 | 6 | Upload (manual, single-account), download, delete, folder, rate limit | ⬜ | | |
 | 7 | Dashboard storage + recent files/activity + global search | ⬜ | | |
@@ -98,6 +98,11 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 3: tombol header memakai `render={<a href="/api/google/connect"/>}` (API Base UI), bukan `asChild` yang tidak ada di Button.
 - Sesi 3: setup kredensial memakai wizard `/tmp/opencode/google-oauth-setup.sh` (sekali jalan; ulangi bila perlu credential baru).
 - Sesi 3 (live): app Google masih **Testing** → hanya *test user* di consent screen yang bisa connect; error 403 `access_denied` = email belum didaftarkan (Cloud Console → APIs & Services → OAuth consent screen → Test users). `next dev` perlu restart setelah `.env` berubah.
+- Sesi 4: `getAccountForUser` difilter `and(id, user_id)` (bukan select-by-id lalu cek di TS) — hasil identik (NOT_FOUND) dan selalu membawa `user_id` sesuai §2.5.3.
+- Sesi 4: peletakan aksi halaman — header berisi `+ Add Account` dan `Refresh` (global, `POST /api/accounts/refresh`), baris tabel berisi `Open Drive` + `Disconnect`; daftar aksi PRD §5.2 tetap lengkap.
+- Sesi 4: `AlertDialogAction` (Base UI) tidak auto-close → dialog Disconnect dikontrol `open` state; ditutup oleh cancel/klik luar atau suksesnya mutation. `shadcn add alert-dialog` menambah `src/components/ui/alert-dialog.tsx`.
+- Sesi 4: `DriveFileDto` tidak diimpor di `service.ts` (lint warning unused) — dipakai kembali mulai Sesi 5. `pnpm format:check` gagal pada `encryption.ts`, `__tests__/encryption.test.ts`, `api/accounts/[id]/route.ts` (terlewat `pnpm format` sesi lalu) — sengaja tak disentuh agar diff sesi 4 fokus; rapikan di Sesi 8.
+- Sesi 4 (live): verifikasi curl memakai sign-in Better Auth dengan password `tes1@example.com` = `Sesi4Verify!` (hash di-set via `better-auth/crypto`), cookie di `/tmp/cookies.txt`; `storage_snapshots.id` tidak punya default DB → insert SQL manual wajib menyetel `id`.
 ```
 
 ---
@@ -1396,7 +1401,7 @@ git add -A && git commit -m "feat: google oauth connect/disconnect with encrypte
 
 ### Langkah-langkah
 
-- [ ] **1. Token manager**
+- [x] **1. Token manager**
 
 Buat `src/lib/google/tokens.ts`:
 
@@ -1450,7 +1455,7 @@ export async function getAccountForUser(userId: string, accountId: string): Prom
 }
 ```
 
-- [ ] **2. GoogleDriveService + pemetaan error**
+- [x] **2. GoogleDriveService + pemetaan error**
 
 Buat `src/lib/google-drive/types.ts`:
 
@@ -1534,7 +1539,7 @@ export class GoogleDriveService {
 }
 ```
 
-- [ ] **3. Sync quota**
+- [x] **3. Sync quota**
 
 Buat `src/lib/quota.ts`:
 
@@ -1584,7 +1589,7 @@ export async function latestSnapshot(accountId: string): Promise<StorageSnapshot
 }
 ```
 
-- [ ] **4. Sinkron quota saat connect**
+- [x] **4. Sinkron quota saat connect**
 
 Di `src/app/api/google/callback/route.ts`, setelah upsert dan sebelum redirect:
 
@@ -1597,7 +1602,7 @@ try {
 }
 ```
 
-- [ ] **5. API storage + refresh + riwayat**
+- [x] **5. API storage + refresh + riwayat**
 
 Buat `src/app/api/storage/route.ts`:
 
@@ -1676,7 +1681,7 @@ export const GET = withAuth<Ctx>(async (user, _req, ctx) => {
 });
 ```
 
-- [ ] **6. Halaman Accounts + AccountsTable**
+- [x] **6. Halaman Accounts + AccountsTable**
 
 Buat `src/components/accounts/accounts-table.tsx` (client):
 
@@ -1690,7 +1695,7 @@ Buat `src/components/accounts/accounts-table.tsx` (client):
 
 `src/app/dashboard/accounts/page.tsx` → server component render `<AccountsTable />`.
 
-- [ ] **7. Pipeline + commit**
+- [x] **7. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -1699,18 +1704,18 @@ git add -A && git commit -m "feat: drive service quota sync and accounts managem
 
 ### Verifikasi
 
-- [ ] Pipeline (`lint/typecheck/test/build`) lulus
-- [ ] Connect akun baru → kembali ke `/dashboard/accounts` dengan toast, baris langsung menampilkan Used/Free (bukan 0)
-- [ ] Klik **Refresh** → `select count(*) from storage_snapshots` bertambah
-- [ ] ≥2 akun tampil dengan angka berbeda
-- [ ] **Disconnect** → baris + snapshot terhapus
-- [ ] `curl -s http://localhost:3000/api/storage -b /tmp/cookies.txt` → struktur `totals` + `accounts[]`
-- [ ] Cross-check `usedBytes` dengan quota di web Google Drive (selisih wajar bila trash dihitung)
+- [x] Pipeline (`lint/typecheck/test/build`) lulus — termasuk 11 unit test baru (fetch-mocked `getStorageQuota` + `mapGoogleError`)
+- [ ] Connect akun baru → kembali ke `/dashboard/accounts` dengan toast, baris langsung menampilkan Used/Free (bukan 0) — **terbatas**: OAuth live butuh interaksi user + browser; jalur sync pasca-connect memakai `syncQuota` yang sama dan teruji lewat `POST /api/accounts/refresh` (snapshot terisi, bukan 0)
+- [x] Klik **Refresh** → `select count(*) from storage_snapshots` bertambah (live: `0 → 2 → 4`, `synced:2`)
+- [x] ≥2 akun tampil dengan angka berbeda (15 GiB/1.34 GiB terpakai vs 5 TiB/14.3 GiB terpakai)
+- [x] **Disconnect** → baris + snapshot terhapus (uji live dengan baris Google + snapshot palsu: `accountCount` 3→2, dua-duanya hilang)
+- [x] `curl -s http://localhost:3000/api/storage -b /tmp/cookies.txt` → struktur `totals` + `accounts[]`; tanpa cookie → 401; `GET /api/accounts/<id>/storage` milik user lain → 404
+- [ ] Cross-check `usedBytes` dengan quota di web Google Drive (selisih wajar bila trash dihitung) — **terbatas**: tanpa browser headless; cross-check internal: `totalBytes` 16106127360 = 15 GiB sesuai kuota 15 GB akun personal, angka konsisten antar-refresh
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 4
-- [ ] Update baris **Sesi 4** di tracker: ✅, tanggal, catatan
+- [x] Commit terakhir sesi 4
+- [x] Update baris **Sesi 4** di tracker: ✅, tanggal, catatan
 
 ---
 
