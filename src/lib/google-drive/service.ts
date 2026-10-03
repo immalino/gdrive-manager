@@ -50,8 +50,15 @@ export class GoogleDriveService {
   async listFiles(
     options: ListOptions = {},
   ): Promise<{ files: DriveFileDto[]; nextPageToken: string | null }> {
+    const rawQ = options.q ?? 'trashed = false';
+    const driveQ =
+      rawQ
+        .split(' and ')
+        .filter((part) => !part.trim().startsWith('size ') && !part.trim().startsWith('size='))
+        .join(' and ') || 'trashed = false';
+
     const params = new URLSearchParams({
-      q: options.q ?? 'trashed = false',
+      q: driveQ,
       pageSize: String(options.pageSize ?? 100),
       fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,parents,webViewLink)',
       orderBy: options.orderBy ?? 'modifiedTime desc',

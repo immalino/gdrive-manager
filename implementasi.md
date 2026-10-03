@@ -79,7 +79,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 10 | Phase 2: Automatic account selection (Mode B) | ✅ | 2026-10-03 | Pipeline lulus (46 unit test, build, lint, format:check). Algoritma selectAccount (PRD §6.3) memilih akun dengan sisa ruang terbesar yang muat file. Upload API mendukung ?mode=auto dengan auto-quota sync & auto-selection. UploadDialog UI memiliki radio Automatic / Specific account dengan panel preview evaluasi kandidat per file (✅/❌) dan proteksi QUOTA_EXCEEDED. Live curl terverifikasi: auto upload ke akun terbesar, reject 413 file melebihi kapasitas seluruh akun, manual mode tetap berfungsi. |
 | 11 | Phase 2: Activity log page + Statistik storage/file | ✅ | 2026-10-03 | Pipeline lulus (52 unit test, build, lint, format:check). API /api/activity mendukung filter action, accountId, dan pagination; API /api/stats menyediakan ringkasan storage, fileKinds, snapshotHistory (AreaChart), dan actionCounts. Halaman /dashboard/activity (ActivityTable) dan /dashboard/stats (StatsCards + StatsCharts) berfungsi penuh; menu Stats ditambahkan ke sidebar; isolasi cross-user teruji aman; statistik bergantung pada kelengkapan index drive_files yang akan diperbarui oleh background sync di Sesi 12. |
 | 12 | Phase 2: Background sync (worker) + account health monitoring | ✅ | 2026-10-03 | Pipeline lulus (61 unit test, build, lint, format:check). Worker src/worker/index.ts (quota 10m, health 30m, index 60m) beroperasi tanpa Redis; indexAccountFiles dengan paging hingga 2000 file; health check memantau konektivitas & menangani token expired (reconnect_required) serta recovery; Docker service worker terkonfigurasi di docker-compose.yml; panduan VPS (PM2/systemd) didokumentasikan di README; UI AccountsTable & Dashboard auto-refetch storage tiap 5 menit. |
-| 13 | Phase 2: Advanced search + file preview | ⬜ | | |
+| 13 | Phase 2: Advanced search + file preview | ✅ | 2026-10-03 | Pipeline lulus (65 unit test, build, lint, format:check). buildDriveQuery diperluas (sizeMin/Max, modifiedAfter/Before). UI FilesFilters mendukung popover filter lanjutan (rentang tanggal, ukuran file angka + unit MB/GB, multi-select checkbox akun, dan tombol reset) dengan URL query params & browser history synchronization. PreviewDialog mendukung preview file Google Drive via iframe dengan tautan fallback Buka di Drive & Download, aksi Preview pada dropdown/quick action baris, serta double-click baris tabel. Live curl terverifikasi: query ukuran >=100MB, multi-akun, kombinasi filter, dan validasi 400. Google Drive API v3 tidak mendukung filter size di q parameter sehingga query disanitasi di service.ts dan difilter in-memory di API route (mirip kind folder/other di Sesi 5). Phase 2 Selesai. |
 
 **Log Sesi** (diisi bila ada keputusan penting lintas sesi):
 
@@ -124,6 +124,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 10: Automatic account selection (Mode B) diimplementasikan di lib/upload/select-account.ts dan diintegrasikan ke POST /api/files/upload (?mode=auto) serta UploadDialog (radio destination + panel preview calon akun per file). Validasi mode auto tidak mewajibkan accountId. Sync quota dipanggil saat seleksi dan setelah upload selesai.
 - Sesi 11: Recharts dipasang untuk visualisasi statistik; `useSyncExternalStore` digunakan pada render chart client untuk menghindari hydration mismatch dan aturan react-hooks/set-state-in-effect; kalkulasi totals dan aggregasi file kinds diisolasi di `src/lib/stats.ts` dan dilindungi unit test; GET /api/activity mendukung filter action & accountId (dengan proteksi user_id) serta pagination; halaman /dashboard/activity dan /dashboard/stats aktif dengan visualisasi dan tabel lengkap; menu Stats ditambahkan ke Sidebar.
 - Sesi 12: Worker loop berjalan tanpa top-level await langsung pada format CJS (menggunakan startWorker().catch() dan guard !process.env.VITEST agar aman diimpor Vitest); Docker service worker berjalan dengan image node:22-alpine; indexAccountFiles melakukan upsert batch ke drive_files dengan paging Google Drive hingga 20 halaman (2.000 file/akun); checkAccountHealth memulihkan status ke connected jika kuota berhasil diambil dan mendeteksi ACCOUNT_DISCONNECTED menjadi reconnect_required; penanganan safe() menjamin kegagalan 1 akun tidak mematikan seluruh proses worker.
+- Sesi 13: Google Drive API v3 tidak mendukung term size di parameter q (mengembalikan 400 Bad Request) → buildDriveQuery tetap menghasilkan size > / < sesuai spesifikasi pengujian, lalu query disanitasi di service.ts sebelum dikirim ke Google API dan hasil difilter in-memory di GET /api/files (pola yang sama dengan kind other/folder pada Sesi 5). PreviewDialog menampilkan iframe Google Drive viewer dengan fallback tautan Buka di Drive dan Download. Popover FilesFilters menggunakan Base UI Popover & Checkbox untuk rentang tanggal, rentang ukuran (MB/GB), dan multi-select akun. Double click baris tabel membuka preview. Seluruh Phase 2 selesai.
 ```
 ```
 
@@ -3651,7 +3652,7 @@ git add -A && git commit -m "feat: background worker for quota sync, health chec
 
 ### Langkah-langkah
 
-- [ ] **1. Test query builder lanjutan (merah)**
+- [x] **1. Test query builder lanjutan (merah)**
 
 Perbarui `src/lib/__tests__/query.test.ts`, tambahkan:
 
@@ -3676,7 +3677,7 @@ it('sortir partikel tidak merusak query', () => {
 
 `pnpm test` → FAIL.
 
-- [ ] **2. Perluas `DriveFileFilters` + `buildDriveQuery`**
+- [x] **2. Perluas `DriveFileFilters` + `buildDriveQuery`**
 
 ```ts
 export interface DriveFileFilters {
@@ -3705,7 +3706,7 @@ Panggilan di `GET /api/files` diperluas: baca `sizeMin`, `sizeMax`, `modifiedAft
 
 Multi-akun: param `accountIds` (dipisah koma) — filter `targets` berdasarkan daftar, bukan hanya satu `accountId`.
 
-- [ ] **3. UI filter lanjutan**
+- [x] **3. UI filter lanjutan**
 
 Di `src/components/files/files-filters.tsx`:
 - Tombol **Filters** → Popover/Dropdown berisi:
@@ -3716,7 +3717,7 @@ Di `src/components/files/files-filters.tsx`:
 - Semua nilai masuk ke `queryKey` dan URL (`?sizeMin=&sizeMax=&modifiedAfter=&modifiedBefore=&accountIds=`).
 - State loading/empty/error tetap seperti Sesi 5.
 
-- [ ] **4. Preview dialog**
+- [x] **4. Preview dialog**
 
 Buat `src/components/files/preview-dialog.tsx`:
 
@@ -3763,7 +3764,7 @@ export function PreviewDialog({ file, onOpenChange }: Props) {
 
 Di `FilesTable`: tambahkan aksi **Preview** (ikon `Eye`) → set state `previewFile`; jadikan seluruh baris double-click untuk preview. Untuk tipe yang tidak didukung viewer (mis. `.zip`), tetap tampilkan iframe + fallback "Buka di Drive"/"Download".
 
-- [ ] **5. Pipeline + commit**
+- [x] **5. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -3772,19 +3773,19 @@ git add -A && git commit -m "feat: advanced search filters and file preview"
 
 ### Verifikasi
 
-- [ ] `pnpm test` → test query builder lanjutan PASS
-- [ ] Filter tanggal (mis. 7 hari terakhir) → hanya file yang dimodifikasi dalam rentang
-- [ ] Filter ukuran ≥ 100 MB → hanya file besar; kombinasi ukuran + jenis + search bekerja bersamaan
-- [ ] Multi-akun terpilih → hasil hanya dari akun terpilih; hapus centang semua → kembali semua akun
-- [ ] Preview gambar/PDF tampil di dialog; tombol "Buka di Drive" berfungsi; Google Doc → preview/ganti tab
-- [ ] URL filter bisa di-copy-paste dan mempertahankan state (back/forward browser OK)
-- [ ] Pipeline lulus
+- [x] `pnpm test` → test query builder lanjutan PASS
+- [x] Filter tanggal (mis. 7 hari terakhir) → hanya file yang dimodifikasi dalam rentang
+- [x] Filter ukuran ≥ 100 MB → hanya file besar; kombinasi ukuran + jenis + search bekerja bersamaan
+- [x] Multi-akun terpilih → hasil hanya dari akun terpilih; hapus centang semua → kembali semua akun
+- [x] Preview gambar/PDF tampil di dialog; tombol "Buka di Drive" berfungsi; Google Doc → preview/ganti tab
+- [x] URL filter bisa di-copy-paste dan mempertahankan state (back/forward browser OK)
+- [x] Pipeline lulus
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 13
-- [ ] Update baris **Sesi 13** di tracker: ✅, tanggal, catatan
-- [ ] **Phase 2 selesai** — tambahkan entri di Log Sesi
+- [x] Commit terakhir sesi 13
+- [x] Update baris **Sesi 13** di tracker: ✅, tanggal, catatan
+- [x] **Phase 2 selesai** — tambahkan entri di Log Sesi
 
 ---
 

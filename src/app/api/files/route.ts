@@ -31,12 +31,69 @@ export const GET = withAuth(async (user, req) => {
   const kind = recent || !kindParam || kindParam === 'all' ? undefined : (kindParam as FileKind);
   const sort = recent ? 'modified' : ((sortParam as SortKey | null) ?? 'modified');
 
-  const accounts = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, user.id));
-  const targets = accountId ? accounts.filter((a) => a.id === accountId) : accounts;
-  if (accountId && targets.length === 0)
-    throw new AppError('NOT_FOUND', 'Akun tidak ditemukan.', 404);
+  let sizeMin: number | undefined;
+  let sizeMax: number | undefined;
+  let modifiedAfter: string | undefined;
+  let modifiedBefore: string | undefined;
 
-  const q = buildDriveQuery({ search, kind });
+  if (!recent) {
+    const sizeMinRaw = sp.get('sizeMin');
+    if (sizeMinRaw !== null && sizeMinRaw !== '') {
+      const val = Number(sizeMinRaw);
+      if (isNaN(val) || val < 0) {
+        throw new AppError('VALIDATION', 'Ukuran minimal tidak valid.', 400);
+      }
+      sizeMin = val;
+    }
+
+    const sizeMaxRaw = sp.get('sizeMax');
+    if (sizeMaxRaw !== null && sizeMaxRaw !== '') {
+      const val = Number(sizeMaxRaw);
+      if (isNaN(val) || val < 0) {
+        throw new AppError('VALIDATION', 'Ukuran maksimal tidak valid.', 400);
+      }
+      sizeMax = val;
+    }
+
+    const modifiedAfterRaw = sp.get('modifiedAfter');
+    if (modifiedAfterRaw !== null && modifiedAfterRaw !== '') {
+      const d = new Date(modifiedAfterRaw);
+      if (isNaN(d.getTime())) {
+        throw new AppError('VALIDATION', 'Tanggal modifiedAfter tidak valid.', 400);
+      }
+      modifiedAfter = modifiedAfterRaw;
+    }
+
+    const modifiedBeforeRaw = sp.get('modifiedBefore');
+    if (modifiedBeforeRaw !== null && modifiedBeforeRaw !== '') {
+      const d = new Date(modifiedBeforeRaw);
+      if (isNaN(d.getTime())) {
+        throw new AppError('VALIDATION', 'Tanggal modifiedBefore tidak valid.', 400);
+      }
+      modifiedBefore = modifiedBeforeRaw;
+    }
+  }
+
+  const accountIdsParam = sp.get('accountIds');
+  const accounts = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, user.id));
+
+  let targets = accounts;
+  if (!recent && accountIdsParam !== null && accountIdsParam !== '') {
+    const ids = accountIdsParam
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (ids.length > 0) {
+      targets = accounts.filter((a) => ids.includes(a.id));
+    }
+  } else if (accountId && accountId !== 'all') {
+    targets = accounts.filter((a) => a.id === accountId);
+    if (targets.length === 0) {
+      throw new AppError('NOT_FOUND', 'Akun tidak ditemukan.', 404);
+    }
+  }
+
+  const q = buildDriveQuery({ search, kind, sizeMin, sizeMax, modifiedAfter, modifiedBefore });
   const pageSize = recent ? 8 : MAX_PER_ACCOUNT;
   const results = await Promise.allSettled(
     targets.map(async (account) => {
@@ -55,6 +112,18 @@ export const GET = withAuth(async (user, req) => {
 
   if (!recent && (kind === 'other' || kind === 'folder')) {
     const filtered = files.filter((f) => classifyMime(f.mimeType) === kind);
+    files.length = 0;
+    files.push(...filtered);
+  }
+
+  if (!recent && sizeMin != null) {
+    const filtered = files.filter((f) => f.sizeBytes != null && f.sizeBytes > sizeMin);
+    files.length = 0;
+    files.push(...filtered);
+  }
+
+  if (!recent && sizeMax != null) {
+    const filtered = files.filter((f) => f.sizeBytes != null && f.sizeBytes < sizeMax);
     files.length = 0;
     files.push(...filtered);
   }

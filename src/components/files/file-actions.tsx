@@ -5,6 +5,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Eye,
   FolderInput,
   MoreHorizontal,
   Pencil,
@@ -58,7 +59,7 @@ export function driveFileUrl(file: DriveFileDto): string {
     : `https://drive.google.com/open?id=${file.id}`;
 }
 
-export function FileActions({ file }: { file: DriveFileDto }) {
+export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview?: () => void }) {
   const queryClient = useQueryClient();
   const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
 
@@ -183,6 +184,18 @@ export function FileActions({ file }: { file: DriveFileDto }) {
   return (
     <div className="flex items-center justify-end gap-1">
       {/* Quick Actions */}
+      {!isFolder && onPreview && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onPreview}
+          aria-label={`Preview ${file.name}`}
+          title="Preview"
+        >
+          <Eye />
+        </Button>
+      )}
+
       <Button
         variant="ghost"
         size="icon-sm"
@@ -218,6 +231,13 @@ export function FileActions({ file }: { file: DriveFileDto }) {
           }
         />
         <DropdownMenuContent align="end">
+          {!isFolder && onPreview && (
+            <DropdownMenuItem onClick={onPreview}>
+              <Eye />
+              <span>Preview</span>
+            </DropdownMenuItem>
+          )}
+
           <DropdownMenuItem
             onClick={() => {
               setRenameName(file.name);

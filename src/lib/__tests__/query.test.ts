@@ -20,4 +20,21 @@ describe('buildDriveQuery', () => {
     expect(q).toContain(' and ');
     expect(q).toContain("mimeType contains 'video/'");
   });
+  it('rentang ukuran dan tanggal', () => {
+    const q = buildDriveQuery({
+      sizeMin: 1024,
+      sizeMax: 1048576,
+      modifiedAfter: '2026-01-01T00:00:00Z',
+      modifiedBefore: '2026-02-01T00:00:00Z',
+    });
+    expect(q).toContain('size > 1024');
+    expect(q).toContain('size < 1048576');
+    expect(q).toContain("modifiedTime > '2026-01-01T00:00:00.000Z'");
+    expect(q).toContain("modifiedTime < '2026-02-01T00:00:00.000Z'");
+  });
+  it('sortir partikel tidak merusak query', () => {
+    expect(buildDriveQuery({ search: "a' and name contains 'b" })).not.toContain(
+      "contains 'a' and name contains 'b'",
+    );
+  });
 });

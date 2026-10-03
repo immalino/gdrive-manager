@@ -32,6 +32,7 @@ import type { FilesResponse, StorageAccountItem, StorageResponse } from '@/types
 import { FileActions } from './file-actions';
 import { FilesFilters } from './files-filters';
 import { NewFolderButton } from './new-folder-dialog';
+import { PreviewDialog } from './preview-dialog';
 
 const EMPTY_FILES: DriveFileDto[] = [];
 const EMPTY_ACCOUNTS: StorageAccountItem[] = [];
@@ -48,53 +49,48 @@ const KIND_ICON: Record<FileKind, typeof FileText> = {
 
 const features = tableFeatures({});
 const helper = createColumnHelper<typeof features, DriveFileDto>();
-const columns = helper.columns([
-  helper.accessor('name', {
-    header: 'Name',
-    cell: ({ row }) => {
-      const Icon = KIND_ICON[classifyMime(row.original.mimeType)];
-      return (
-        <div className="flex items-center gap-2">
-          <Icon className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate font-medium">{row.original.name}</span>
-        </div>
-      );
-    },
-  }),
-  helper.accessor('sizeBytes', {
-    header: 'Size',
-    cell: ({ getValue }) => formatBytes(getValue()),
-  }),
-  helper.accessor('accountEmail', { header: 'Account' }),
-  helper.accessor('modifiedAt', {
-    header: 'Updated',
-    cell: ({ getValue }) => {
-      const value = getValue();
-      return value ? formatDateTime(value) : '—';
-    },
-  }),
-  helper.display({
-    id: 'actions',
-    header: 'Actions',
-    cell: ({ row }) => <FileActions file={row.original} />,
-  }),
-]);
 
 export interface FilesInitialFilters {
   search: string;
   accountId: string;
+  accountIds?: string[];
   kind: string;
   sort: SortKey;
   dir: 'asc' | 'desc';
+  sizeMin?: number;
+  sizeMax?: number;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
 }
 
-function buildFilesParams(filters: FilesInitialFilters, includeDefaults = false): URLSearchParams {
+interface FilesFilterState {
+  search: string;
+  accountId: string;
+  accountIds: string[];
+  kind: string;
+  sort: SortKey;
+  dir: 'asc' | 'desc';
+  sizeMin?: number;
+  sizeMax?: number;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
+}
+
+function buildFilesParams(filters: FilesFilterState, includeDefaults = false): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.search) params.set('search', filters.search);
-  if (filters.accountId !== 'all') params.set('accountId', filters.accountId);
+  if (filters.accountIds && filters.accountIds.length > 0) {
+    params.set('accountIds', filters.accountIds.join(','));
+  } else if (filters.accountId && filters.accountId !== 'all') {
+    params.set('accountId', filters.accountId);
+  }
   if (filters.kind !== 'all') params.set('kind', filters.kind);
   if (includeDefaults || filters.sort !== 'modified') params.set('sort', filters.sort);
   if (includeDefaults || filters.dir !== 'desc') params.set('dir', filters.dir);
+  if (filters.sizeMin != null) params.set('sizeMin', String(filters.sizeMin));
+  if (filters.sizeMax != null) params.set('sizeMax', String(filters.sizeMax));
+  if (filters.modifiedAfter) params.set('modifiedAfter', filters.modifiedAfter);
+  if (filters.modifiedBefore) params.set('modifiedBefore', filters.modifiedBefore);
   return params;
 }
 
@@ -102,16 +98,49 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get('search') ?? '';
   const lastUrlSearchRef = useRef(urlSearch);
+
   const [searchInput, setSearchInput] = useState(initial.search);
   const [search, setSearch] = useState(initial.search);
   const [accountId, setAccountId] = useState(initial.accountId || 'all');
+  const [accountIds, setAccountIds] = useState<string[]>(
+    initial.accountIds ??
+      (initial.accountId && initial.accountId !== 'all' ? [initial.accountId] : []),
+  );
   const [kind, setKind] = useState(initial.kind || 'all');
   const [sort, setSort] = useState<SortKey>(initial.sort);
   const [dir, setDir] = useState<'asc' | 'desc'>(initial.dir);
+  const [sizeMin, setSizeMin] = useState<number | undefined>(initial.sizeMin);
+  const [sizeMax, setSizeMax] = useState<number | undefined>(initial.sizeMax);
+  const [modifiedAfter, setModifiedAfter] = useState<string | undefined>(initial.modifiedAfter);
+  const [modifiedBefore, setModifiedBefore] = useState<string | undefined>(initial.modifiedBefore);
 
-  const filters = useMemo(
-    () => ({ search, accountId, kind, sort, dir }),
-    [search, accountId, kind, sort, dir],
+  const [previewFile, setPreviewFile] = useState<DriveFileDto | null>(null);
+
+  const filters: FilesFilterState = useMemo(
+    () => ({
+      search,
+      accountId,
+      accountIds,
+      kind,
+      sort,
+      dir,
+      sizeMin,
+      sizeMax,
+      modifiedAfter,
+      modifiedBefore,
+    }),
+    [
+      search,
+      accountId,
+      accountIds,
+      kind,
+      sort,
+      dir,
+      sizeMin,
+      sizeMax,
+      modifiedAfter,
+      modifiedBefore,
+    ],
   );
 
   useEffect(() => {
@@ -127,6 +156,40 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
     const timer = setTimeout(() => setSearch(searchInput), 400);
     return () => clearTimeout(timer);
   }, [searchInput, search]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const sp = new URLSearchParams(window.location.search);
+      const newSearch = sp.get('search') ?? '';
+      setSearchInput(newSearch);
+      setSearch(newSearch);
+      const newKind = sp.get('kind') ?? 'all';
+      setKind(newKind);
+      const newSort = (sp.get('sort') as SortKey) ?? 'modified';
+      setSort(newSort);
+      const newDir = (sp.get('dir') as 'asc' | 'desc') ?? 'desc';
+      setDir(newDir);
+      const accIds = sp.get('accountIds');
+      const accId = sp.get('accountId');
+      if (accIds) {
+        setAccountIds(accIds.split(',').filter(Boolean));
+      } else if (accId && accId !== 'all') {
+        setAccountIds([accId]);
+      } else {
+        setAccountIds([]);
+      }
+      setAccountId(accId ?? 'all');
+      const sMin = sp.get('sizeMin');
+      setSizeMin(sMin ? Number(sMin) : undefined);
+      const sMax = sp.get('sizeMax');
+      setSizeMax(sMax ? Number(sMax) : undefined);
+      setModifiedAfter(sp.get('modifiedAfter') ?? undefined);
+      setModifiedBefore(sp.get('modifiedBefore') ?? undefined);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const syncedRef = useRef(false);
   useEffect(() => {
@@ -149,6 +212,51 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
     queryFn: () => api.get<StorageResponse>('/api/storage'),
   });
 
+  const columns = useMemo(
+    () =>
+      helper.columns([
+        helper.accessor('name', {
+          header: 'Name',
+          cell: ({ row }) => {
+            const Icon = KIND_ICON[classifyMime(row.original.mimeType)];
+            return (
+              <div className="flex items-center gap-2">
+                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="truncate font-medium">{row.original.name}</span>
+              </div>
+            );
+          },
+        }),
+        helper.accessor('sizeBytes', {
+          header: 'Size',
+          cell: ({ getValue }) => formatBytes(getValue()),
+        }),
+        helper.accessor('accountEmail', { header: 'Account' }),
+        helper.accessor('modifiedAt', {
+          header: 'Updated',
+          cell: ({ getValue }) => {
+            const value = getValue();
+            return value ? formatDateTime(value) : '—';
+          },
+        }),
+        helper.display({
+          id: 'actions',
+          header: 'Actions',
+          cell: ({ row }) => (
+            <FileActions
+              file={row.original}
+              onPreview={
+                row.original.mimeType !== 'application/vnd.google-apps.folder'
+                  ? () => setPreviewFile(row.original)
+                  : undefined
+              }
+            />
+          ),
+        }),
+      ]),
+    [],
+  );
+
   const table = useTable({
     features,
     columns,
@@ -157,6 +265,15 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
   });
 
   const failedAccounts = data?.failedAccounts ?? [];
+
+  const handleResetAdvanced = () => {
+    setSizeMin(undefined);
+    setSizeMax(undefined);
+    setModifiedAfter(undefined);
+    setModifiedBefore(undefined);
+    setAccountIds([]);
+    setAccountId('all');
+  };
 
   return (
     <div className="space-y-4">
@@ -167,12 +284,23 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
             onSearchChange={setSearchInput}
             accountId={accountId}
             onAccountChange={setAccountId}
+            accountIds={accountIds}
+            onAccountIdsChange={setAccountIds}
             kind={kind}
             onKindChange={setKind}
             sort={sort}
             onSortChange={setSort}
             dir={dir}
             onDirChange={setDir}
+            sizeMin={sizeMin}
+            onSizeMinChange={setSizeMin}
+            sizeMax={sizeMax}
+            onSizeMaxChange={setSizeMax}
+            modifiedAfter={modifiedAfter}
+            onModifiedAfterChange={setModifiedAfter}
+            modifiedBefore={modifiedBefore}
+            onModifiedBeforeChange={setModifiedBefore}
+            onResetAdvanced={handleResetAdvanced}
             accounts={storage?.accounts ?? EMPTY_ACCOUNTS}
           />
         </div>
@@ -254,7 +382,19 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
             </TableRow>
           ) : (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow
+                key={row.id}
+                onDoubleClick={() => {
+                  if (row.original.mimeType !== 'application/vnd.google-apps.folder') {
+                    setPreviewFile(row.original);
+                  }
+                }}
+                className={
+                  row.original.mimeType !== 'application/vnd.google-apps.folder'
+                    ? 'cursor-pointer hover:bg-muted/50'
+                    : undefined
+                }
+              >
                 {row.getAllCells().map((cell) => (
                   <TableCell
                     key={cell.id}
@@ -274,6 +414,13 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
           )}
         </TableBody>
       </Table>
+
+      <PreviewDialog
+        file={previewFile}
+        onOpenChange={(open) => {
+          if (!open) setPreviewFile(null);
+        }}
+      />
     </div>
   );
 }

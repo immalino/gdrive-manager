@@ -3,6 +3,10 @@ import type { FileKind } from '@/lib/files/mime';
 export interface DriveFileFilters {
   search?: string;
   kind?: FileKind;
+  sizeMin?: number;
+  sizeMax?: number;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
 }
 
 function escapeQuote(value: string): string {
@@ -23,5 +27,11 @@ export function buildDriveQuery(filters: DriveFileFilters): string {
   if (filters.search?.trim()) parts.push(`name contains '${escapeQuote(filters.search.trim())}'`);
   const kindSql = filters.kind ? KIND_SQL[filters.kind] : undefined;
   if (kindSql) parts.push(kindSql);
+  if (filters.sizeMin != null) parts.push(`size > ${Math.floor(filters.sizeMin)}`);
+  if (filters.sizeMax != null) parts.push(`size < ${Math.floor(filters.sizeMax)}`);
+  if (filters.modifiedAfter)
+    parts.push(`modifiedTime > '${new Date(filters.modifiedAfter).toISOString()}'`);
+  if (filters.modifiedBefore)
+    parts.push(`modifiedTime < '${new Date(filters.modifiedBefore).toISOString()}'`);
   return parts.join(' and ');
 }
