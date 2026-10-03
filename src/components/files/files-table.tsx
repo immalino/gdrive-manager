@@ -36,7 +36,8 @@ import { classifyMime, type FileKind } from '@/lib/files/mime';
 import type { SortKey } from '@/lib/files/merge';
 import { formatBytes, formatDateTime } from '@/lib/format';
 import type { DriveFileDto } from '@/lib/google-drive/types';
-import type { FilesResponse, StorageAccountItem, StorageResponse } from '@/types';
+import type { BreadcrumbItem, FilesResponse, StorageAccountItem, StorageResponse } from '@/types';
+import { Breadcrumb } from '@/components/file-browser/breadcrumb';
 import { BulkActionBar } from './bulk-action-bar';
 import { FileActions } from './file-actions';
 import { FilesFilters } from './files-filters';
@@ -60,6 +61,7 @@ const features = tableFeatures({ rowSelectionFeature });
 const helper = createColumnHelper<typeof features, DriveFileDto>();
 
 export interface FilesInitialFilters {
+  folderId?: string;
   search: string;
   accountId: string;
   accountIds?: string[];
@@ -73,6 +75,7 @@ export interface FilesInitialFilters {
 }
 
 interface FilesFilterState {
+  folderId?: string;
   search: string;
   accountId: string;
   accountIds: string[];
@@ -87,6 +90,7 @@ interface FilesFilterState {
 
 function buildFilesParams(filters: FilesFilterState, includeDefaults = false): URLSearchParams {
   const params = new URLSearchParams();
+  if (filters.folderId) params.set('folderId', filters.folderId);
   if (filters.search) params.set('search', filters.search);
   if (filters.accountIds && filters.accountIds.length > 0) {
     params.set('accountIds', filters.accountIds.join(','));
@@ -103,25 +107,38 @@ function buildFilesParams(filters: FilesFilterState, includeDefaults = false): U
   return params;
 }
 
-export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
+export function FilesTable({
+  initial,
+  folderId: propFolderId,
+  onNavigateFolder,
+  onBreadcrumbLoaded,
+  showAccountColumn = false,
+}: {
+  initial?: Partial<FilesInitialFilters>;
+  folderId?: string;
+  onNavigateFolder?: (folderId: string) => void;
+  onBreadcrumbLoaded?: (items: BreadcrumbItem[]) => void;
+  showAccountColumn?: boolean;
+}) {
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get('search') ?? '';
   const lastUrlSearchRef = useRef(urlSearch);
 
-  const [searchInput, setSearchInput] = useState(initial.search);
-  const [search, setSearch] = useState(initial.search);
-  const [accountId, setAccountId] = useState(initial.accountId || 'all');
+  const [folderId, setFolderId] = useState<string | undefined>(propFolderId ?? initial?.folderId);
+  const [searchInput, setSearchInput] = useState(initial?.search ?? '');
+  const [search, setSearch] = useState(initial?.search ?? '');
+  const [accountId, setAccountId] = useState(initial?.accountId || 'all');
   const [accountIds, setAccountIds] = useState<string[]>(
-    initial.accountIds ??
-      (initial.accountId && initial.accountId !== 'all' ? [initial.accountId] : []),
+    initial?.accountIds ??
+      (initial?.accountId && initial.accountId !== 'all' ? [initial.accountId] : []),
   );
-  const [kind, setKind] = useState(initial.kind || 'all');
-  const [sort, setSort] = useState<SortKey>(initial.sort);
-  const [dir, setDir] = useState<'asc' | 'desc'>(initial.dir);
-  const [sizeMin, setSizeMin] = useState<number | undefined>(initial.sizeMin);
-  const [sizeMax, setSizeMax] = useState<number | undefined>(initial.sizeMax);
-  const [modifiedAfter, setModifiedAfter] = useState<string | undefined>(initial.modifiedAfter);
-  const [modifiedBefore, setModifiedBefore] = useState<string | undefined>(initial.modifiedBefore);
+  const [kind, setKind] = useState(initial?.kind || 'all');
+  const [sort, setSort] = useState<SortKey>(initial?.sort ?? 'modified');
+  const [dir, setDir] = useState<'asc' | 'desc'>(initial?.dir ?? 'desc');
+  const [sizeMin, setSizeMin] = useState<number | undefined>(initial?.sizeMin);
+  const [sizeMax, setSizeMax] = useState<number | undefined>(initial?.sizeMax);
+  const [modifiedAfter, setModifiedAfter] = useState<string | undefined>(initial?.modifiedAfter);
+  const [modifiedBefore, setModifiedBefore] = useState<string | undefined>(initial?.modifiedBefore);
 
   const [previewFile, setPreviewFile] = useState<DriveFileDto | null>(null);
 
@@ -130,6 +147,7 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
 
   const filters: FilesFilterState = useMemo(
     () => ({
+      folderId,
       search,
       accountId,
       accountIds,
@@ -142,6 +160,7 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
       modifiedBefore,
     }),
     [
+      folderId,
       search,
       accountId,
       accountIds,
@@ -154,6 +173,23 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
       modifiedBefore,
     ],
   );
+
+  const [prevPropFolderId, setPrevPropFolderId] = useState(propFolderId);
+  if (propFolderId !== prevPropFolderId) {
+    setPrevPropFolderId(propFolderId);
+    setFolderId(propFolderId);
+  }
+
+  const handleFolderClick = (clickedFolderId: string) => {
+    setFolderId(clickedFolderId);
+    if (onNavigateFolder) {
+      onNavigateFolder(clickedFolderId);
+    } else {
+      const sp = new URLSearchParams(window.location.search);
+      sp.set('folderId', clickedFolderId);
+      window.history.pushState(null, '', `?${sp.toString()}`);
+    }
+  };
 
   useEffect(() => {
     if (urlSearch !== lastUrlSearchRef.current) {
@@ -172,6 +208,8 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
   useEffect(() => {
     const handlePopState = () => {
       const sp = new URLSearchParams(window.location.search);
+      const newFolderId = sp.get('folderId') || undefined;
+      setFolderId(newFolderId);
       const newSearch = sp.get('search') ?? '';
       setSearchInput(newSearch);
       setSearch(newSearch);
@@ -224,6 +262,12 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
     queryFn: () => api.get<FilesResponse>(`/api/files?${buildFilesParams(filters, true)}`),
     placeholderData: keepPreviousData,
   });
+
+  useEffect(() => {
+    if (data?.breadcrumb && onBreadcrumbLoaded) {
+      onBreadcrumbLoaded(data.breadcrumb);
+    }
+  }, [data?.breadcrumb, onBreadcrumbLoaded]);
 
   const { data: storage } = useQuery({
     queryKey: ['storage'],
@@ -297,10 +341,24 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
     helper.accessor('name', {
       header: 'Name',
       cell: ({ row }) => {
+        const isFolder = row.original.mimeType === 'application/vnd.google-apps.folder';
         const Icon = KIND_ICON[classifyMime(row.original.mimeType)];
         return (
-          <div className="flex items-center gap-2">
-            <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <div
+            className={cn('flex items-center gap-2', isFolder && 'hover:underline text-foreground')}
+            onClick={(e) => {
+              if (isFolder) {
+                e.stopPropagation();
+                handleFolderClick(row.original.id);
+              }
+            }}
+          >
+            <Icon
+              className={cn(
+                'size-4 shrink-0',
+                isFolder ? 'text-amber-500 fill-amber-500/20' : 'text-muted-foreground',
+              )}
+            />
             <span className="truncate font-medium">{row.original.name}</span>
           </div>
         );
@@ -310,7 +368,7 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
       header: 'Size',
       cell: ({ getValue }) => formatBytes(getValue()),
     }),
-    helper.accessor('accountEmail', { header: 'Account' }),
+    ...(showAccountColumn ? [helper.accessor('accountEmail', { header: 'Account' })] : []),
     helper.accessor('modifiedAt', {
       header: 'Updated',
       cell: ({ getValue }) => {
@@ -361,6 +419,11 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
     <div className="flex flex-1 flex-col min-h-0 space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between shrink-0">
         <div className="min-w-0 flex-1">
+          {!onBreadcrumbLoaded && data?.breadcrumb && (
+            <div className="mb-3">
+              <Breadcrumb items={data.breadcrumb} onNavigate={handleFolderClick} />
+            </div>
+          )}
           <FilesFilters
             searchInput={searchInput}
             onSearchChange={setSearchInput}
@@ -465,43 +528,47 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
                 colSpan={columns.length}
                 className="h-32 text-center text-sm text-muted-foreground"
               >
-                Tidak ada file. Coba ubah filter atau hubungkan akun lain.
+                Empty folder
               </TableCell>
             </TableRow>
           ) : (
-            table.getRowModel().rows.map((row) => (
-              <TableRow
-                key={row.id}
-                data-state={row.getIsSelected() ? 'selected' : undefined}
-                onDoubleClick={() => {
-                  if (row.original.mimeType !== 'application/vnd.google-apps.folder') {
-                    setPreviewFile(row.original);
-                  }
-                }}
-                className={
-                  row.original.mimeType !== 'application/vnd.google-apps.folder'
-                    ? 'cursor-pointer hover:bg-muted/50'
-                    : undefined
-                }
-              >
-                {row.getAllCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    className={
-                      cell.column.id === 'select'
-                        ? 'w-10 px-2 text-center'
-                        : cell.column.id === 'actions'
-                          ? 'text-right'
-                          : cell.column.id === 'name'
-                            ? 'max-w-0'
-                            : undefined
+            table.getRowModel().rows.map((row) => {
+              const isFolder = row.original.mimeType === 'application/vnd.google-apps.folder';
+              return (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() ? 'selected' : undefined}
+                  onClick={() => {
+                    if (isFolder) {
+                      handleFolderClick(row.original.id);
                     }
-                  >
-                    <table.FlexRender cell={cell} />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
+                  }}
+                  onDoubleClick={() => {
+                    if (!isFolder) {
+                      setPreviewFile(row.original);
+                    }
+                  }}
+                  className="cursor-pointer hover:bg-muted/50"
+                >
+                  {row.getAllCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className={
+                        cell.column.id === 'select'
+                          ? 'w-10 px-2 text-center'
+                          : cell.column.id === 'actions'
+                            ? 'text-right'
+                            : cell.column.id === 'name'
+                              ? 'max-w-0'
+                              : undefined
+                      }
+                    >
+                      <table.FlexRender cell={cell} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              );
+            })
           )}
         </TableBody>
       </Table>

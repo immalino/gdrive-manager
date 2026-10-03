@@ -37,4 +37,12 @@ describe('buildDriveQuery', () => {
       "contains 'a' and name contains 'b'",
     );
   });
+  it('folderId menyaring file dalam parent folder', () => {
+    const q = buildDriveQuery({ folderId: 'folder_abc123' });
+    expect(q).toBe("trashed = false and 'folder_abc123' in parents");
+  });
+  it('folderId dengan escape quote dan search', () => {
+    const q = buildDriveQuery({ folderId: "fol'der", search: 'test' });
+    expect(q).toBe("trashed = false and 'fol\\'der' in parents and name contains 'test'");
+  });
 });

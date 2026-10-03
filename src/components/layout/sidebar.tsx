@@ -23,8 +23,8 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/files', label: 'Files', icon: FolderOpen },
+  { href: '/dashboard', label: 'My Drive', icon: FolderOpen },
+  { href: '/dashboard/storage', label: 'Storage', icon: LayoutDashboard },
   { href: '/dashboard/accounts', label: 'Accounts', icon: Users },
   { href: '/dashboard/activity', label: 'Activity', icon: Activity },
   { href: '/dashboard/stats', label: 'Stats', icon: BarChart3 },
@@ -32,7 +32,7 @@ const navItems: NavItem[] = [
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === '/dashboard') return pathname === '/dashboard';
+  if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/dashboard/files';
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

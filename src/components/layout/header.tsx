@@ -24,9 +24,9 @@ function HeaderSearch({ defaultSearch }: { defaultSearch: string }) {
     e.preventDefault();
     const query = value.trim();
     if (query) {
-      router.push(`/dashboard/files?search=${encodeURIComponent(query)}`);
+      router.push(`/dashboard?search=${encodeURIComponent(query)}`);
     } else {
-      router.push('/dashboard/files');
+      router.push('/dashboard');
     }
   }
 

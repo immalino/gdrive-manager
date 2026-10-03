@@ -19,9 +19,9 @@ export function QuickActions() {
           <Plus />
           Add Account
         </Button>
-        <Button variant="outline" render={<Link href="/dashboard/files" />}>
+        <Button variant="outline" render={<Link href="/dashboard" />}>
           <FolderOpen />
-          File Manager
+          My Drive
         </Button>
       </CardContent>
     </Card>

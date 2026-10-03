@@ -1,6 +1,7 @@
 import type { FileKind } from '@/lib/files/mime';
 
 export interface DriveFileFilters {
+  folderId?: string;
   search?: string;
   kind?: FileKind;
   sizeMin?: number;
@@ -24,6 +25,7 @@ const KIND_SQL: Partial<Record<FileKind, string>> = {
 
 export function buildDriveQuery(filters: DriveFileFilters): string {
   const parts = ['trashed = false'];
+  if (filters.folderId?.trim()) parts.push(`'${escapeQuote(filters.folderId.trim())}' in parents`);
   if (filters.search?.trim()) parts.push(`name contains '${escapeQuote(filters.search.trim())}'`);
   const kindSql = filters.kind ? KIND_SQL[filters.kind] : undefined;
   if (kindSql) parts.push(kindSql);

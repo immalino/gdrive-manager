@@ -8,6 +8,9 @@ import { buildDriveQuery } from '@/lib/google-drive/query';
 import { GoogleDriveService } from '@/lib/google-drive/service';
 import type { DriveFileDto } from '@/lib/google-drive/types';
 import { ok, withAuth } from '@/lib/http';
+import { getSetupStatus } from '@/lib/shared-drive/setup';
+import { getFolderBreadcrumb } from '@/lib/shared-drive/breadcrumb';
+import type { BreadcrumbItem } from '@/types';
 
 const MAX_PER_ACCOUNT = 100;
 const SORT_KEYS: SortKey[] = ['name', 'size', 'modified'];
@@ -93,7 +96,24 @@ export const GET = withAuth(async (user, req) => {
     }
   }
 
-  const q = buildDriveQuery({ search, kind, sizeMin, sizeMax, modifiedAfter, modifiedBefore });
+  const folderIdParam = sp.get('folderId');
+  const setupStatus = await getSetupStatus(user.id);
+  const sharedRoot = setupStatus.sharedRoot;
+
+  let targetFolderId: string | undefined = folderIdParam ?? undefined;
+  if (!recent && !targetFolderId && sharedRoot) {
+    targetFolderId = sharedRoot.driveFolderId;
+  }
+
+  const q = buildDriveQuery({
+    folderId: targetFolderId,
+    search,
+    kind,
+    sizeMin,
+    sizeMax,
+    modifiedAfter,
+    modifiedBefore,
+  });
   const pageSize = recent ? 8 : MAX_PER_ACCOUNT;
   const results = await Promise.allSettled(
     targets.map(async (account) => {
@@ -103,12 +123,21 @@ export const GET = withAuth(async (user, req) => {
     }),
   );
 
-  const files: DriveFileDto[] = [];
+  const rawFiles: DriveFileDto[] = [];
   const failedAccounts: string[] = [];
   results.forEach((result, i) => {
-    if (result.status === 'fulfilled') files.push(...result.value);
+    if (result.status === 'fulfilled') rawFiles.push(...result.value);
     else failedAccounts.push(targets[i]!.email);
   });
+
+  const seenIds = new Set<string>();
+  const files: DriveFileDto[] = [];
+  for (const f of rawFiles) {
+    if (!seenIds.has(f.id)) {
+      seenIds.add(f.id);
+      files.push(f);
+    }
+  }
 
   if (!recent && (kind === 'other' || kind === 'folder')) {
     const filtered = files.filter((f) => classifyMime(f.mimeType) === kind);
@@ -158,6 +187,33 @@ export const GET = withAuth(async (user, req) => {
       });
   }
 
+  let currentFolder: BreadcrumbItem | null = null;
+  let breadcrumb: BreadcrumbItem[] = [];
+
+  if (targetFolderId && sharedRoot) {
+    const serviceAccount = setupStatus.primaryAccount ?? accounts[0] ?? null;
+    if (serviceAccount) {
+      try {
+        const service = await GoogleDriveService.forAccount(serviceAccount);
+        const bcResult = await getFolderBreadcrumb(
+          service,
+          sharedRoot.driveFolderId,
+          targetFolderId,
+          sharedRoot.folderName || 'My Drive',
+        );
+        currentFolder = bcResult.currentFolder;
+        breadcrumb = bcResult.breadcrumb;
+      } catch (err) {
+        console.warn('[GET /api/files] Failed to compute breadcrumb:', err);
+      }
+    }
+  }
+
   const sorted = sortFiles(files, sort, dir);
-  return ok({ files: recent ? sorted.slice(0, 8) : sorted, failedAccounts });
+  return ok({
+    files: recent ? sorted.slice(0, 8) : sorted,
+    failedAccounts,
+    currentFolder,
+    breadcrumb,
+  });
 });

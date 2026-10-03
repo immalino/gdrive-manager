@@ -35,9 +35,21 @@ export interface StorageResponse {
   accounts: StorageAccountItem[];
 }
 
+export interface BreadcrumbItem {
+  id: string;
+  name: string;
+}
+
 export interface FilesResponse {
   files: DriveFileDto[];
   failedAccounts: string[];
+  currentFolder?: BreadcrumbItem | null;
+  breadcrumb?: BreadcrumbItem[];
+}
+
+export interface BreadcrumbResponse {
+  breadcrumb: BreadcrumbItem[];
+  currentFolder?: BreadcrumbItem | null;
 }
 
 export interface ActivityItem {

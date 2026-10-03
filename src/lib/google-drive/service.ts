@@ -444,4 +444,31 @@ export class GoogleDriveService {
       method: 'DELETE',
     });
   }
+
+  async getFile(
+    fileId: string,
+    fields: string = 'id,name,mimeType,parents,webViewLink,modifiedTime,size',
+  ): Promise<DriveFileDto> {
+    const res = await this.request(`/files/${fileId}?fields=${encodeURIComponent(fields)}`);
+    const f = (await res.json()) as {
+      id: string;
+      name: string;
+      mimeType: string;
+      size?: string;
+      modifiedTime?: string;
+      parents?: string[];
+      webViewLink?: string;
+    };
+    return {
+      id: f.id,
+      name: f.name,
+      mimeType: f.mimeType,
+      sizeBytes: f.size ? Number(f.size) : null,
+      modifiedAt: f.modifiedTime ?? null,
+      parentId: f.parents?.[0] ?? null,
+      webViewLink: f.webViewLink ?? null,
+      accountId: this.account.id,
+      accountEmail: this.account.email,
+    };
+  }
 }

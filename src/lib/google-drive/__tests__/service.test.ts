@@ -453,5 +453,34 @@ describe('GoogleDriveService resumable chunked upload methods', () => {
       );
       vi.unstubAllGlobals();
     });
+
+    it('getFile mengambil metadata file atau folder', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            id: 'file-123',
+            name: 'Documents',
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: ['folder-root-123'],
+          }),
+          { status: 200 },
+        ),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const file = await service().getFile('file-123', 'id,name,mimeType,parents');
+      expect(file.id).toBe('file-123');
+      expect(file.name).toBe('Documents');
+      expect(file.mimeType).toBe('application/vnd.google-apps.folder');
+      expect(file.parentId).toBe('folder-root-123');
+      expect(file.accountId).toBe(account.id);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://www.googleapis.com/drive/v3/files/file-123?fields=id%2Cname%2CmimeType%2Cparents',
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer access-token-123' },
+        }),
+      );
+      vi.unstubAllGlobals();
+    });
   });
 });

@@ -86,7 +86,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 17 | ~~Phase 3: Storage Balancing Engine & Cross-Account File Migration~~ | 🚫 | — | **DIBATALKAN** — digantikan oleh Phase 4 (Shared Virtual Drive). Fitur storage balancing & migration akan diadaptasi di Sesi 24. |
 | 18 | ~~Phase 3: Distributed Rate Limiter & Production Hardening~~ | 🚫 | — | **DIBATALKAN** — digantikan oleh Phase 4. Hardening & distributed rate limit masuk Sesi 25. |
 | 19 | Phase 4: Schema Migration + Setup Wizard (Shared Root) | ✅ | 2026-10-03 | Pipeline lulus (95 unit test, build, lint, format:check). Skema DB baru (shared_roots, shared_permissions, role di google_accounts) ter-generate & migrate. GoogleDriveService diperluas (createSharedRootFolder, shareFolder, revokePermission). Endpoint /api/setup/init, /status, /share/[accountId] aktif. SetupWizard UI multi-step di /dashboard/setup dengan auto-redirect guard (Next.js 16 proxy.ts + SetupGuard). OAuth callback auto-share ke akun pool baru. Live curl terverifikasi: folder root dibuat di Google Drive asli, role primary/pool ter-set, permission Google Editor terbit dan tercatat di DB, activity logs setup.init & setup.share tersimpan, guard redirect /dashboard <-> /dashboard/setup bekerja dua arah. |
-| 20 | Phase 4: File Browser — Folder Navigation + Breadcrumb | ⬜ | — | UI file browser mirip GDrive: navigasi folder, breadcrumb, folder tree sidebar, refactor file listing dari flat ke folder-scoped. |
+| 20 | Phase 4: File Browser — Folder Navigation + Breadcrumb | ✅ | 2026-10-03 | Pipeline lulus (103 unit test, build, lint, format:check). Folder-scoped listing di GET /api/files (?folderId=, default shared root) dengan query parent Drive dan breadcrumb; API /api/folders/[id]/breadcrumb aktif; komponen Breadcrumb dan FileBrowser; FilesTable mendukung klik navigasi folder, tombol back, empty folder text "Empty folder", kolom account opsional; sidebar My Drive menuju ke root folder dan menu Storage diarahkan ke /dashboard/storage; /dashboard/files redirect ke /dashboard dengan query params. |
 | 21 | Phase 4: Upload ke Shared Folder + Folder Creation by Primary | ⬜ | — | Refactor upload agar target = shared folder saat ini, folder creation selalu pakai akun utama, auto account selection tetap berlaku. |
 | 22 | Phase 4: Refactor File Operations untuk Shared Drive | ⬜ | — | Adaptasi download/delete/rename/move/copy/bulk ops agar bekerja dalam konteks shared folder, search scoped ke shared root. |
 | 23 | Phase 4: UI Revamp — GDrive-like Interface | ⬜ | — | Sidebar baru (My Drive, Recent, Storage bar), file browser grid/list view, drag & drop dalam folder context, responsive layout. |
@@ -4126,7 +4126,7 @@ git add -A && git commit -m "feat: phase 4 schema migration and setup wizard for
 
 ### Langkah-langkah
 
-- [ ] **1. Refactor API `GET /api/files` — folder-scoped listing**
+- [x] **1. Refactor API `GET /api/files` — folder-scoped listing**
 
 Ubah `GET /api/files` agar:
 - Menerima parameter `?folderId=<drive_folder_id>`.
@@ -4134,21 +4134,21 @@ Ubah `GET /api/files` agar:
 - Query Google Drive: `'${folderId}' in parents and trashed = false` (ditambahkan ke query builder).
 - Response menyertakan metadata folder saat ini.
 
-- [ ] **2. API breadcrumb**
+- [x] **2. API breadcrumb**
 
 Buat `GET /api/folders/[id]/breadcrumb`:
 - Traverse parent chain folder menggunakan `GoogleDriveService.getFile(id)` (field `parents`).
 - Berhenti saat sampai di root folder (match `sharedRoot.driveFolderId`).
 - Return array `[{ id, name }, ...]` dari root ke current.
 
-- [ ] **3. Komponen Breadcrumb**
+- [x] **3. Komponen Breadcrumb**
 
 Buat `src/components/file-browser/breadcrumb.tsx`:
 - Render breadcrumb klikabel: `📁 My Drive > Documents > Reports`.
 - Klik item → navigasi ke folder tersebut (`router.push` / update URL).
 - Item terakhir = folder aktif (tidak klikabel).
 
-- [ ] **4. Komponen File Browser**
+- [x] **4. Komponen File Browser**
 
 Buat `src/components/file-browser/file-browser.tsx`:
 - Membaca `folderId` dari URL search params (default: root).
@@ -4156,26 +4156,26 @@ Buat `src/components/file-browser/file-browser.tsx`:
 - Render: Breadcrumb + Toolbar + FilesTable.
 - Handle navigasi: klik folder row → update `folderId` di URL.
 
-- [ ] **5. Modifikasi FilesTable — folder klik**
+- [x] **5. Modifikasi FilesTable — folder klik**
 
 Di `src/components/files/files-table.tsx`:
 - Klik baris folder → navigasi ke folder tersebut (update URL `?folderId=`).
 - Klik baris file → tetap behavior lama (preview/actions).
 - Kolom "Account" bisa dihilangkan atau dijadikan opsional (karena user tidak perlu tahu file di akun mana).
 
-- [ ] **6. Sidebar update**
+- [x] **6. Sidebar update**
 
 Modifikasi `src/components/layout/sidebar.tsx`:
 - Entry "My Drive" → link ke `/dashboard` (root folder, tanpa `folderId`).
 - Hilangkan atau sesuaikan entry "Files" (karena "My Drive" = file browser).
 
-- [ ] **7. Dashboard page — redirect ke file browser**
+- [x] **7. Dashboard page — redirect ke file browser**
 
 Modifikasi `src/app/dashboard/page.tsx`:
 - Halaman dashboard utama sekarang adalah file browser (bukan storage overview).
 - Atau: buat `/dashboard` sebagai file browser, pindahkan storage overview ke `/dashboard/storage`.
 
-- [ ] **8. Pipeline + commit**
+- [x] **8. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -4184,19 +4184,19 @@ git add -A && git commit -m "feat: file browser with folder navigation and bread
 
 ### Verifikasi
 
-- [ ] Navigasi ke `/dashboard` → tampil isi root folder (bukan flat list semua file)
-- [ ] Klik folder "Documents" → URL berubah ke `?folderId=<id>`, isi folder ditampilkan
-- [ ] Breadcrumb menunjukkan `My Drive > Documents`
-- [ ] Klik "My Drive" di breadcrumb → kembali ke root folder
-- [ ] Folder kosong → tampil pesan "Empty folder"
-- [ ] Search tetap berfungsi (di dalam konteks folder atau global)
-- [ ] Sidebar "My Drive" mengarah ke root folder
-- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [x] Navigasi ke `/dashboard` → tampil isi root folder (bukan flat list semua file)
+- [x] Klik folder "Documents" → URL berubah ke `?folderId=<id>`, isi folder ditampilkan
+- [x] Breadcrumb menunjukkan `My Drive > Documents`
+- [x] Klik "My Drive" di breadcrumb → kembali ke root folder
+- [x] Folder kosong → tampil pesan "Empty folder"
+- [x] Search tetap berfungsi (di dalam konteks folder atau global)
+- [x] Sidebar "My Drive" mengarah ke root folder
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 20
-- [ ] Update baris **Sesi 20** di tracker: ✅, tanggal, catatan handoff
+- [x] Commit terakhir sesi 20
+- [x] Update baris **Sesi 20** di tracker: ✅, tanggal, catatan handoff
 
 ---
 

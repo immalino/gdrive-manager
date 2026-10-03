@@ -39,7 +39,7 @@ export function RecentFiles({ files = [], isLoading }: RecentFilesProps) {
           <CardTitle className="text-base font-semibold">Recent Files</CardTitle>
           <CardDescription>File yang baru diperbarui di seluruh akun.</CardDescription>
         </div>
-        <Button variant="ghost" size="sm" render={<Link href="/dashboard/files" />}>
+        <Button variant="ghost" size="sm" render={<Link href="/dashboard" />}>
           Lihat semua
         </Button>
       </CardHeader>
