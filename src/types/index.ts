@@ -52,3 +52,14 @@ export interface ActivityItem {
 export interface ActivityResponse {
   activity: ActivityItem[];
 }
+
+export interface FolderItem {
+  id: string;
+  name: string;
+  accountId: string;
+  accountEmail: string;
+}
+
+export interface FoldersResponse {
+  folders: FolderItem[];
+}

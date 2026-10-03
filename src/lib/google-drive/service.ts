@@ -2,6 +2,7 @@ import type { GoogleAccount } from '@/db/schema';
 import { AppError } from '@/lib/errors';
 import { mapGoogleError } from '@/lib/google/errors';
 import { getValidAccessToken } from '@/lib/google/tokens';
+import { buildMoveParams } from '@/lib/files/move-params';
 import type { DriveFileDto, DriveQuota } from './types';
 
 const API_BASE = 'https://www.googleapis.com/drive/v3';
@@ -223,5 +224,69 @@ export class GoogleDriveService {
       accountId: this.account.id,
       accountEmail: this.account.email,
     };
+  }
+
+  async renameFile(fileId: string, name: string): Promise<void> {
+    const res = await this.request(`/files/${fileId}?fields=id,name`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw await mapGoogleError(res, this.account);
+  }
+
+  async moveFile(
+    fileId: string,
+    fromParentId: string | null,
+    toParentId: string | null,
+  ): Promise<void> {
+    const { addParents, removeParents } = buildMoveParams(fromParentId, toParentId);
+    const search = new URLSearchParams({ fields: 'id,parents' });
+    if (addParents) search.set('addParents', addParents);
+    if (removeParents) search.set('removeParents', removeParents);
+    const res = await this.request(`/files/${fileId}?${search.toString()}`, { method: 'PATCH' });
+    if (!res.ok) throw await mapGoogleError(res, this.account);
+  }
+
+  async copyFile(fileId: string, name: string, parentId?: string): Promise<DriveFileDto> {
+    const res = await this.request(
+      `/files/${fileId}/copy?fields=id,name,mimeType,size,modifiedTime,parents,webViewLink`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, ...(parentId ? { parents: [parentId] } : {}) }),
+      },
+    );
+    if (!res.ok) throw await mapGoogleError(res, this.account);
+    const body = (await res.json()) as {
+      id: string;
+      name: string;
+      mimeType: string;
+      size?: string;
+      modifiedTime?: string;
+      parents?: string[];
+      webViewLink?: string;
+    };
+    return {
+      id: body.id,
+      name: body.name,
+      mimeType: body.mimeType,
+      sizeBytes: body.size ? Number(body.size) : null,
+      modifiedAt: body.modifiedTime ?? null,
+      parentId: body.parents?.[0] ?? parentId ?? null,
+      webViewLink: body.webViewLink ?? null,
+      accountId: this.account.id,
+      accountEmail: this.account.email,
+    };
+  }
+
+  async listFolders(parentId?: string): Promise<Array<{ id: string; name: string }>> {
+    const parentClause = parentId ? `'${parentId}' in parents` : `'root' in parents`;
+    const q = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and ${parentClause}`;
+    const res = await this.request(
+      `/files?pageSize=200&q=${encodeURIComponent(q)}&fields=files(id,name)`,
+    );
+    const body = (await res.json()) as { files?: Array<{ id: string; name: string }> };
+    return body.files ?? [];
   }
 }

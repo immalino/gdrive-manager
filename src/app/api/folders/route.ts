@@ -32,3 +32,14 @@ export const POST = withAuth(async (user, req) => {
   });
   return ok({ folder }, 201);
 });
+
+export const GET = withAuth(async (user, req) => {
+  const accountId = req.nextUrl.searchParams.get('accountId');
+  if (!accountId) throw new AppError('VALIDATION', 'accountId wajib.', 400);
+  const account = await getAccountForUser(user.id, accountId);
+  const service = await GoogleDriveService.forAccount(account);
+  const folders = await service.listFolders();
+  return ok({
+    folders: folders.map((f) => ({ ...f, accountId: account.id, accountEmail: account.email })),
+  });
+});

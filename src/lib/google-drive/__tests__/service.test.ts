@@ -149,3 +149,96 @@ describe('mapGoogleError', () => {
     expect(error.status).toBe(502);
   });
 });
+
+describe('GoogleDriveService file & folder operations', () => {
+  it('renameFile mengirim PATCH dengan name baru', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: 'f-1', name: 'new.txt' }), { status: 200 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await service().renameFile('f-1', 'new.txt');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://www.googleapis.com/drive/v3/files/f-1?fields=id,name',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'new.txt' }),
+      }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('moveFile memanggil PATCH dengan addParents dan removeParents', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ id: 'f-1' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await service().moveFile('f-1', 'old-parent', 'new-parent');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '/files/f-1?fields=id%2Cparents&addParents=new-parent&removeParents=old-parent',
+      ),
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('copyFile mengirim POST dan mengembalikan DriveFileDto terpetakan', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'copy-1',
+          name: 'copy.txt',
+          mimeType: 'text/plain',
+          size: '1024',
+          modifiedTime: '2026-10-03T10:00:00Z',
+          parents: ['folder-1'],
+          webViewLink: 'https://drive.google.com/copy',
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await service().copyFile('f-1', 'copy.txt', 'folder-1');
+
+    expect(result).toEqual({
+      id: 'copy-1',
+      name: 'copy.txt',
+      mimeType: 'text/plain',
+      sizeBytes: 1024,
+      modifiedAt: '2026-10-03T10:00:00Z',
+      parentId: 'folder-1',
+      webViewLink: 'https://drive.google.com/copy',
+      accountId: account.id,
+      accountEmail: account.email,
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('listFolders mengembalikan daftar folder dari API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          files: [
+            { id: 'dir-1', name: 'Documents' },
+            { id: 'dir-2', name: 'Photos' },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const folders = await service().listFolders();
+
+    expect(folders).toHaveLength(2);
+    expect(folders[0]).toEqual({ id: 'dir-1', name: 'Documents' });
+    vi.unstubAllGlobals();
+  });
+});
