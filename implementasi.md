@@ -103,6 +103,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 4: `AlertDialogAction` (Base UI) tidak auto-close → dialog Disconnect dikontrol `open` state; ditutup oleh cancel/klik luar atau suksesnya mutation. `shadcn add alert-dialog` menambah `src/components/ui/alert-dialog.tsx`.
 - Sesi 4: `DriveFileDto` tidak diimpor di `service.ts` (lint warning unused) — dipakai kembali mulai Sesi 5. `pnpm format:check` gagal pada `encryption.ts`, `__tests__/encryption.test.ts`, `api/accounts/[id]/route.ts` (terlewat `pnpm format` sesi lalu) — sengaja tak disentuh agar diff sesi 4 fokus; rapikan di Sesi 8.
 - Sesi 4 (live): verifikasi curl memakai sign-in Better Auth dengan password `tes1@example.com` = `Sesi4Verify!` (hash di-set via `better-auth/crypto`), cookie di `/tmp/cookies.txt`; `storage_snapshots.id` tidak punya default DB → insert SQL manual wajib menyetel `id`.
+- Sesi 4 (review): dua temuan dibereskan sebelum tutup sesi — tipe mati `StorageSnapshotsResponse` dihapus, dan riwayat snapshot kini lewat `recentSnapshots()` di `quota.ts` (modul pembaca snapshot) alih-alih query duplikat di route.
 ```
 
 ---
