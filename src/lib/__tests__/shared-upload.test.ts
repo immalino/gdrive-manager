@@ -60,6 +60,7 @@ vi.mock('@/db', () => ({
     insert: () => ({
       values: () => ({
         returning: () => mockDbInsert(),
+        onConflictDoUpdate: () => mockDbInsert(),
       }),
     }),
     update: () => ({

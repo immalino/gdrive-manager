@@ -4,7 +4,6 @@ import { Filter, RotateCcw, Search, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -19,7 +18,6 @@ import { FILE_KINDS, type FileKind } from '@/lib/files/mime';
 import type { SortKey } from '@/lib/files/merge';
 import type { StorageAccountItem } from '@/types';
 
-const ALL_ACCOUNTS = 'All Accounts';
 const ALL_TYPES = 'All Types';
 
 const KIND_ITEMS: Record<string, string> = {
@@ -48,10 +46,10 @@ const DIR_ITEMS: Record<string, string> = {
 export interface FilesFiltersProps {
   searchInput: string;
   onSearchChange: (value: string) => void;
-  accountId: string;
-  onAccountChange: (value: string) => void;
-  accountIds: string[];
-  onAccountIdsChange: (ids: string[]) => void;
+  accountId?: string;
+  onAccountChange?: (value: string) => void;
+  accountIds?: string[];
+  onAccountIdsChange?: (ids: string[]) => void;
   kind: string;
   onKindChange: (value: string) => void;
   sort: SortKey;
@@ -67,16 +65,12 @@ export interface FilesFiltersProps {
   modifiedBefore?: string;
   onModifiedBeforeChange: (value?: string) => void;
   onResetAdvanced: () => void;
-  accounts: StorageAccountItem[];
+  accounts?: StorageAccountItem[];
 }
 
 export function FilesFilters({
   searchInput,
   onSearchChange,
-  accountId,
-  onAccountChange,
-  accountIds,
-  onAccountIdsChange,
   kind,
   onKindChange,
   sort,
@@ -92,7 +86,6 @@ export function FilesFilters({
   modifiedBefore,
   onModifiedBeforeChange,
   onResetAdvanced,
-  accounts,
 }: FilesFiltersProps) {
   const [sizeUnit, setSizeUnit] = useState<'MB' | 'GB'>('MB');
   const mult = sizeUnit === 'GB' ? 1024 ** 3 : 1024 ** 2;
@@ -151,7 +144,6 @@ export function FilesFilters({
   };
 
   const activeAdvancedCount = [
-    accountIds.length > 0,
     sizeMin != null,
     sizeMax != null,
     Boolean(modifiedAfter),
@@ -163,17 +155,6 @@ export function FilesFilters({
     setMaxSizeInput('');
     onResetAdvanced();
   };
-
-  const accountItems: Record<string, string> = {};
-  if (accountIds.length > 1) {
-    accountItems.multiple = `${accountIds.length} Accounts`;
-  }
-  for (const a of accounts) {
-    accountItems[a.id] = a.email;
-  }
-
-  const currentSelectAccountValue =
-    accountIds.length > 1 ? 'multiple' : accountIds.length === 1 ? accountIds[0]! : accountId;
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -189,36 +170,6 @@ export function FilesFilters({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={currentSelectAccountValue}
-          onValueChange={(value) => {
-            const val = String(value);
-            if (val === 'all') {
-              onAccountChange('all');
-              onAccountIdsChange([]);
-            } else if (val !== 'multiple') {
-              onAccountChange(val);
-              onAccountIdsChange([val]);
-            }
-          }}
-          items={{ all: ALL_ACCOUNTS, ...accountItems }}
-        >
-          <SelectTrigger className="w-48" aria-label="Filter akun">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="start">
-            <SelectItem value="all">{ALL_ACCOUNTS}</SelectItem>
-            {accountIds.length > 1 && (
-              <SelectItem value="multiple">{`${accountIds.length} Accounts`}</SelectItem>
-            )}
-            {accounts.map((account) => (
-              <SelectItem key={account.id} value={account.id}>
-                {account.email}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         <Select
           value={kind}
           onValueChange={(value) => onKindChange(String(value))}
@@ -323,7 +274,7 @@ export function FilesFilters({
                     value={modifiedAfter ? modifiedAfter.slice(0, 10) : ''}
                     onChange={(e) => {
                       const val = e.target.value;
-                      onModifiedAfterChange(
+                      onModifiedAfterChange?.(
                         val ? new Date(`${val}T00:00:00.000Z`).toISOString() : undefined,
                       );
                     }}
@@ -338,7 +289,7 @@ export function FilesFilters({
                     value={modifiedBefore ? modifiedBefore.slice(0, 10) : ''}
                     onChange={(e) => {
                       const val = e.target.value;
-                      onModifiedBeforeChange(
+                      onModifiedBeforeChange?.(
                         val ? new Date(`${val}T23:59:59.999Z`).toISOString() : undefined,
                       );
                     }}
@@ -403,43 +354,6 @@ export function FilesFilters({
                   />
                 </div>
               </div>
-            </div>
-
-            {/* Accounts Multi-Select */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Akun Google Drive</Label>
-              <div className="max-h-36 overflow-y-auto space-y-1.5 rounded-md border p-2">
-                {accounts.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Tidak ada akun terhubung.</p>
-                ) : (
-                  accounts.map((account) => {
-                    const isChecked = accountIds.includes(account.id);
-                    return (
-                      <label
-                        key={account.id}
-                        className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/50 p-1 rounded"
-                      >
-                        <Checkbox
-                          checked={isChecked}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              onAccountIdsChange([...accountIds, account.id]);
-                            } else {
-                              onAccountIdsChange(accountIds.filter((id) => id !== account.id));
-                            }
-                          }}
-                        />
-                        <span className="truncate">{account.email}</span>
-                      </label>
-                    );
-                  })
-                )}
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                {accountIds.length === 0
-                  ? 'Semua akun dicari (kosong = semua akun).'
-                  : `${accountIds.length} dari ${accounts.length} akun dipilih.`}
-              </p>
             </div>
 
             {/* Footer */}

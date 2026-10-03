@@ -346,6 +346,7 @@ export function FilesTable({
         return (
           <div
             className={cn('flex items-center gap-2', isFolder && 'hover:underline text-foreground')}
+            title={row.original.accountEmail ? `Owner: ${row.original.accountEmail}` : undefined}
             onClick={(e) => {
               if (isFolder) {
                 e.stopPropagation();

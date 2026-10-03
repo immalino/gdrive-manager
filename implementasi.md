@@ -87,7 +87,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 18 | ~~Phase 3: Distributed Rate Limiter & Production Hardening~~ | 🚫 | — | **DIBATALKAN** — digantikan oleh Phase 4. Hardening & distributed rate limit masuk Sesi 25. |
 | 19 | Phase 4: Schema Migration + Setup Wizard (Shared Root) | ✅ | 2026-10-03 | Pipeline lulus (95 unit test, build, lint, format:check). Skema DB baru (shared_roots, shared_permissions, role di google_accounts) ter-generate & migrate. GoogleDriveService diperluas (createSharedRootFolder, shareFolder, revokePermission). Endpoint /api/setup/init, /status, /share/[accountId] aktif. SetupWizard UI multi-step di /dashboard/setup dengan auto-redirect guard (Next.js 16 proxy.ts + SetupGuard). OAuth callback auto-share ke akun pool baru. Live curl terverifikasi: folder root dibuat di Google Drive asli, role primary/pool ter-set, permission Google Editor terbit dan tercatat di DB, activity logs setup.init & setup.share tersimpan, guard redirect /dashboard <-> /dashboard/setup bekerja dua arah. |
 | 21 | Phase 4: Upload ke Shared Folder + Folder Creation by Primary | ✅ | 2026-10-04 | Pipeline lulus (113 unit test, build, lint, format:check). Refactor POST /api/files/upload & POST /api/files/upload/session untuk menerima parentFolderId (default ke sharedRoot.driveFolderId) dengan validasi isSubfolderOfSharedRoot; folder creation di POST /api/folders selalu menggunakan primary account; chunked uploader & upload queue meneruskan parentFolderId; UI UploadDialog beralih ke mode Automatic secara default dengan collapsible advanced options toggle untuk specific account; NewFolderButton/NewFolderDialog membuat folder di akun utama tanpa perlu memilih akun dan menerima parentFolderId; UploadDropzone & FilesDropOverlay meneruskan parentFolderId ke antrean upload. |
-| 22 | Phase 4: Refactor File Operations untuk Shared Drive | ⬜ | — | Adaptasi download/delete/rename/move/copy/bulk ops agar bekerja dalam konteks shared folder, search scoped ke shared root. |
+| 22 | Phase 4: Refactor File Operations untuk Shared Drive | ✅ | 2026-10-04 | Pipeline lulus (123 unit test, build, lint, format:check). Operasi file (delete, download, rename, move, copy) diadaptasi untuk shared drive context dengan automatic owner resolution via drive_files; bulk delete & bulk move mendukung item lintas akun secara serempak ke folder target; search di-refactor scoped ke shared root dengan pencarian di index cache drive_files; worker indexer mengindeks folder hierarkis shared root secara BFS; filter & dropdown Account dihapus dari FilesFilters (abstracted away) dan info owner ditampilkan di tooltip file. |
 | 23 | Phase 4: UI Revamp — GDrive-like Interface | ⬜ | — | Sidebar baru (My Drive, Recent, Storage bar), file browser grid/list view, drag & drop dalam folder context, responsive layout. |
 | 24 | Phase 4: Shared Drive Integrity + Storage Balancing (Adapted) | ⬜ | — | Worker verifikasi shared root integrity, auto-reshare akun baru, storage balancing & migration diadaptasi untuk shared folder model. |
 | 25 | Phase 4: Production Hardening + Phase 4 Acceptance | ⬜ | — | Distributed rate limit, worker heartbeat, audit keamanan, acceptance run-through Phase 4 lengkap. |
@@ -4324,28 +4324,28 @@ git add -A && git commit -m "feat: upload to shared folder and folder creation b
 
 ### Langkah-langkah
 
-- [ ] **1. Refactor file operations — shared context**
+- [x] **1. Refactor file operations — shared context**
 
 Untuk setiap operasi file, pastikan:
 - Lookup akun pemilik file melalui `drive_files.googleAccountId`.
 - Gunakan token akun pemilik untuk operasi yang membutuhkan ownership (delete, download).
 - Gunakan token akun utama untuk operasi folder (move antar folder).
 
-- [ ] **2. Refactor search — scoped ke shared root**
+- [x] **2. Refactor search — scoped ke shared root**
 
 Modifikasi `GET /api/files`:
 - Jika `?search=` diberikan, cari di `drive_files` index cache (yang sudah scoped ke shared root).
 - Atau cari via Google Drive API: `name contains '<term>' and '<rootFolderId>' in parents` (perlu explore apakah Google Drive API mendukung recursive search dalam folder).
 - Alternative: search di index cache `drive_files` yang sudah scoped.
 
-- [ ] **3. Refactor index cache**
+- [x] **3. Refactor index cache**
 
 Modifikasi worker indexer (`src/lib/google-drive/indexer.ts`):
 - Index hanya file yang berada di shared root folder.
 - Gunakan query: `'<rootFolderId>' in parents and trashed = false` untuk setiap level.
 - Atau: list semua file yang accessible dari akun utama dengan `q` filter.
 
-- [ ] **4. UI — hide account column**
+- [x] **4. UI — hide account column**
 
 Modifikasi `FilesTable`:
 - Hilangkan atau sembunyikan kolom "Account" dari default view.
@@ -4355,13 +4355,13 @@ Modifikasi `FilesFilters`:
 - Hilangkan filter "Account" (karena semua file berada di satu shared space).
 - Pertahankan filter lain (type, date, size).
 
-- [ ] **5. Bulk operations — multi-account aware**
+- [x] **5. Bulk operations — multi-account aware**
 
 Modifikasi `POST /api/files/bulk-delete` dan `POST /api/files/bulk-move`:
 - Group file berdasarkan akun pemilik.
 - Execute delete/move per akun menggunakan token masing-masing.
 
-- [ ] **6. Pipeline + commit**
+- [x] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -4370,21 +4370,21 @@ git add -A && git commit -m "feat: refactor file operations for shared drive con
 
 ### Verifikasi
 
-- [ ] Download file → berhasil (menggunakan token akun pemilik)
-- [ ] Delete file → file terhapus dari shared folder dan Google Drive akun pemilik
-- [ ] Rename file → nama berubah di shared folder
-- [ ] Move file dari folder A ke folder B → file pindah
-- [ ] Copy file → salinan muncul di folder tujuan
-- [ ] Search di shared root → hasil hanya file dalam shared folder
-- [ ] Bulk delete file (milik akun berbeda) → semua terhapus
-- [ ] Kolom "Account" tidak terlihat di default view file browser
-- [ ] Index cache hanya berisi file dari shared root
-- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [x] Download file → berhasil (menggunakan token akun pemilik)
+- [x] Delete file → file terhapus dari shared folder dan Google Drive akun pemilik
+- [x] Rename file → nama berubah di shared folder
+- [x] Move file dari folder A ke folder B → file pindah
+- [x] Copy file → salinan muncul di folder tujuan
+- [x] Search di shared root → hasil hanya file dalam shared folder
+- [x] Bulk delete file (milik akun berbeda) → semua terhapus
+- [x] Kolom "Account" tidak terlihat di default view file browser
+- [x] Index cache hanya berisi file dari shared root
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 22
-- [ ] Update baris **Sesi 22** di tracker: ✅, tanggal, catatan handoff
+- [x] Commit terakhir sesi 22
+- [x] Update baris **Sesi 22** di tracker: ✅, tanggal, catatan handoff
 
 ---
 

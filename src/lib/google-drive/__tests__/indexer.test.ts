@@ -150,4 +150,85 @@ describe('indexAccountFiles', () => {
     expect(mockListFiles).toHaveBeenCalledTimes(1);
     expect(mockInsert).not.toHaveBeenCalled();
   });
+
+  it('menggunakan query scoped parents jika rootFolderId diberikan', async () => {
+    mockListFiles.mockResolvedValueOnce({
+      files: [
+        {
+          id: 'f-root-1',
+          name: 'shared.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 1024,
+          modifiedAt: null,
+          parentId: 'shared-root-123',
+          webViewLink: null,
+          accountId: 'acc-1',
+          accountEmail: 'acc1@gmail.com',
+        },
+      ],
+      nextPageToken: null,
+    });
+
+    const total = await indexAccountFiles(testAccount, 'shared-root-123');
+
+    expect(total).toBe(1);
+    expect(mockListFiles).toHaveBeenCalledWith(
+      expect.objectContaining({
+        q: "'shared-root-123' in parents and trashed = false",
+      }),
+    );
+  });
+
+  it('melakukan traversal rekursif ke subfolder saat ditemukan folder anak', async () => {
+    mockListFiles
+      .mockResolvedValueOnce({
+        files: [
+          {
+            id: 'subfolder-1',
+            name: 'Documents',
+            mimeType: 'application/vnd.google-apps.folder',
+            sizeBytes: null,
+            modifiedAt: null,
+            parentId: 'shared-root-123',
+            webViewLink: null,
+            accountId: 'acc-1',
+            accountEmail: 'acc1@gmail.com',
+          },
+        ],
+        nextPageToken: null,
+      })
+      .mockResolvedValueOnce({
+        files: [
+          {
+            id: 'f-nested-1',
+            name: 'report.docx',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            sizeBytes: 5000,
+            modifiedAt: null,
+            parentId: 'subfolder-1',
+            webViewLink: null,
+            accountId: 'acc-1',
+            accountEmail: 'acc1@gmail.com',
+          },
+        ],
+        nextPageToken: null,
+      });
+
+    const total = await indexAccountFiles(testAccount, 'shared-root-123');
+
+    expect(total).toBe(2);
+    expect(mockListFiles).toHaveBeenCalledTimes(2);
+    expect(mockListFiles).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        q: "'shared-root-123' in parents and trashed = false",
+      }),
+    );
+    expect(mockListFiles).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        q: "'subfolder-1' in parents and trashed = false",
+      }),
+    );
+  });
 });

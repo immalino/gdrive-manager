@@ -1,3 +1,6 @@
+import { sql } from 'drizzle-orm';
+import { db } from '@/db';
+import { driveFiles } from '@/db/schema';
 import { logActivity } from '@/lib/activity';
 import { AppError } from '@/lib/errors';
 import { ok, withAuth } from '@/lib/http';
@@ -49,6 +52,39 @@ export const POST = withAuth(async (user, req) => {
 
   const service = await GoogleDriveService.forAccount(targetAccount);
   const folder = await service.createFolder(name.trim(), targetParentId);
+
+  try {
+    const insertBuilder = db.insert(driveFiles).values({
+      googleAccountId: targetAccount.id,
+      driveFileId: folder.id,
+      name: folder.name,
+      mimeType: folder.mimeType,
+      kind: 'folder',
+      sizeBytes: null,
+      modifiedAt: folder.modifiedAt ? new Date(folder.modifiedAt) : null,
+      parentId: targetParentId ?? null,
+      indexedAt: new Date(),
+    });
+    if (
+      'onConflictDoUpdate' in insertBuilder &&
+      typeof (insertBuilder as { onConflictDoUpdate?: unknown }).onConflictDoUpdate === 'function'
+    ) {
+      await (
+        insertBuilder as {
+          onConflictDoUpdate: (opts: unknown) => Promise<unknown>;
+        }
+      ).onConflictDoUpdate({
+        target: [driveFiles.googleAccountId, driveFiles.driveFileId],
+        set: {
+          name: sql`excluded.name`,
+          parentId: sql`excluded.parent_id`,
+          indexedAt: sql`excluded.indexed_at`,
+        },
+      });
+    }
+  } catch (cacheErr) {
+    console.warn('[POST /api/folders] Caching folder to driveFiles failed:', cacheErr);
+  }
 
   await logActivity({
     userId: user.id,

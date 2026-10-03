@@ -71,8 +71,8 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
 
   const canUpload = Boolean(
     files.length > 0 &&
-      !quotaError &&
-      (destinationMode === 'auto' ? connected.length > 0 : selectedAccount),
+    !quotaError &&
+    (destinationMode === 'auto' ? connected.length > 0 : selectedAccount),
   );
 
   function reset() {
@@ -150,7 +150,10 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
                   {files.map((file, idx) => {
                     const picked = selectAccount(file.size, connected);
                     return (
-                      <div key={idx} className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                      <div
+                        key={idx}
+                        className="space-y-2 rounded-lg border bg-muted/30 p-3 text-sm"
+                      >
                         <div className="flex items-center justify-between">
                           <p className="truncate font-medium text-foreground">
                             File: {file.name} ({formatBytes(file.size)})

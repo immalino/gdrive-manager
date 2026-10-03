@@ -14,4 +14,5 @@ export interface DriveFileDto {
   webViewLink: string | null;
   accountId: string;
   accountEmail: string;
+  ownerEmail?: string | null;
 }

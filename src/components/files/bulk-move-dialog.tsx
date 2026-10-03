@@ -1,10 +1,8 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -43,54 +41,16 @@ export function BulkMoveDialog({
 }: BulkMoveDialogProps) {
   const queryClient = useQueryClient();
 
-  const accountsMap = useMemo(() => {
-    const map = new Map<
-      string,
-      { accountId: string; accountEmail: string; files: DriveFileDto[] }
-    >();
-    for (const f of selectedFiles) {
-      const existing = map.get(f.accountId);
-      if (existing) {
-        existing.files.push(f);
-      } else {
-        map.set(f.accountId, {
-          accountId: f.accountId,
-          accountEmail: f.accountEmail,
-          files: [f],
-        });
-      }
-    }
-    return map;
-  }, [selectedFiles]);
-
-  const accountList = useMemo(() => Array.from(accountsMap.values()), [accountsMap]);
-  const isMultiAccount = accountList.length > 1;
-
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [targetFolderId, setTargetFolderId] = useState('root');
   const [folderFilter, setFolderFilter] = useState('');
 
-  const activeAccount =
-    (selectedAccountId ? accountsMap.get(selectedAccountId) : null) ?? accountList[0];
-  const activeAccountId = activeAccount?.accountId ?? '';
-  const filesToMove = useMemo(() => activeAccount?.files ?? [], [activeAccount]);
-
-  const accountSelectItems = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const acc of accountList) {
-      map[acc.accountId] = `${acc.accountEmail} (${acc.files.length} item)`;
-    }
-    return map;
-  }, [accountList]);
-
   const { data: foldersData, isLoading: foldersLoading } = useQuery({
-    queryKey: ['folders', activeAccountId],
-    queryFn: () =>
-      api.get<FoldersResponse>(`/api/folders?accountId=${encodeURIComponent(activeAccountId)}`),
-    enabled: open && !!activeAccountId,
+    queryKey: ['folders'],
+    queryFn: () => api.get<FoldersResponse>('/api/folders'),
+    enabled: open,
   });
 
-  const selectedFolderIds = useMemo(() => new Set(filesToMove.map((f) => f.id)), [filesToMove]);
+  const selectedFolderIds = useMemo(() => new Set(selectedFiles.map((f) => f.id)), [selectedFiles]);
 
   const availableFolders = useMemo(() => {
     const list = (foldersData?.folders ?? []).filter((f) => !selectedFolderIds.has(f.id));
@@ -109,14 +69,13 @@ export function BulkMoveDialog({
 
   const mutation = useMutation({
     mutationFn: () => {
-      const items = filesToMove.map((f) => ({
+      const items = selectedFiles.map((f) => ({
         id: f.id,
         accountId: f.accountId,
         fromFolderId: f.parentId ?? null,
       }));
       return api.post<BulkMoveResponse>('/api/files/bulk-move', {
         items,
-        targetAccountId: activeAccountId,
         targetFolderId: targetFolderId === 'root' ? null : targetFolderId,
       });
     },
@@ -143,7 +102,6 @@ export function BulkMoveDialog({
       open={open}
       onOpenChange={(next) => {
         if (!next) {
-          setSelectedAccountId(null);
           setTargetFolderId('root');
           setFolderFilter('');
         }
@@ -154,58 +112,22 @@ export function BulkMoveDialog({
         <DialogHeader>
           <DialogTitle>Pindahkan File</DialogTitle>
           <DialogDescription>
-            Pindahkan file terpilih ke folder tujuan di Google Drive.
+            Pindahkan {selectedFiles.length} item terpilih ke folder tujuan di Shared Drive.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {isMultiAccount && (
-            <Alert variant="destructive">
-              <AlertCircle className="size-4" />
-              <AlertTitle>File Lintas Akun Terdeteksi</AlertTitle>
-              <AlertDescription className="text-xs">
-                Pemindahan massal hanya didukung dalam satu akun yang sama. Pilih akun yang ingin
-                Anda proses di bawah ini.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {isMultiAccount && (
-            <div className="space-y-1.5">
-              <Label>Pilih Akun yang Diproses</Label>
-              <Select
-                value={activeAccountId}
-                onValueChange={(val) => {
-                  setSelectedAccountId(String(val));
-                  setTargetFolderId('root');
-                }}
-                items={accountSelectItems}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {accountList.map((acc) => (
-                    <SelectItem key={acc.accountId} value={acc.accountId}>
-                      {acc.accountEmail} ({acc.files.length} item)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-foreground">
-                Item yang akan dipindahkan ({filesToMove.length} item):
+                Item yang akan dipindahkan ({selectedFiles.length} item):
               </span>
-              <span className="text-muted-foreground">{activeAccount?.accountEmail}</span>
             </div>
             <div className="max-h-32 overflow-y-auto rounded-md border p-2 text-xs space-y-1">
-              {filesToMove.map((file) => (
-                <div key={file.id} className="truncate">
-                  {file.name}
+              {selectedFiles.map((file) => (
+                <div key={file.id} className="flex items-center justify-between gap-2 py-0.5">
+                  <span className="truncate font-medium">{file.name}</span>
+                  <span className="shrink-0 text-muted-foreground">{file.accountEmail}</span>
                 </div>
               ))}
             </div>
@@ -247,7 +169,7 @@ export function BulkMoveDialog({
           {mutation.isPending && (
             <div className="space-y-1.5 py-1">
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Memindahkan {filesToMove.length} item...</span>
+                <span>Memindahkan {selectedFiles.length} item...</span>
               </div>
               <Progress value={null} className="h-1.5 w-full animate-pulse" />
             </div>
@@ -263,10 +185,10 @@ export function BulkMoveDialog({
             Batal
           </Button>
           <Button
-            disabled={mutation.isPending || filesToMove.length === 0 || foldersLoading}
+            disabled={mutation.isPending || selectedFiles.length === 0 || foldersLoading}
             onClick={() => mutation.mutate()}
           >
-            {mutation.isPending ? 'Memindahkan...' : `Pindahkan (${filesToMove.length})`}
+            {mutation.isPending ? 'Memindahkan...' : `Pindahkan (${selectedFiles.length})`}
           </Button>
         </DialogFooter>
       </DialogContent>

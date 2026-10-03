@@ -78,9 +78,8 @@ export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview
 
   // Folder query untuk picker Move & Copy
   const { data: foldersData, isLoading: foldersLoading } = useQuery({
-    queryKey: ['folders', file.accountId],
-    queryFn: () =>
-      api.get<FoldersResponse>(`/api/folders?accountId=${encodeURIComponent(file.accountId)}`),
+    queryKey: ['folders'],
+    queryFn: () => api.get<FoldersResponse>('/api/folders'),
     enabled: moveOpen || copyOpen,
   });
 
@@ -344,7 +343,7 @@ export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Move {isFolder ? 'Folder' : 'File'}</DialogTitle>
-            <DialogDescription>Pilih folder tujuan di akun {file.accountEmail}.</DialogDescription>
+            <DialogDescription>Pilih folder tujuan di Shared Drive.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -411,9 +410,7 @@ export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Copy File</DialogTitle>
-              <DialogDescription>
-                Buat salinan file ini di akun {file.accountEmail}.
-              </DialogDescription>
+              <DialogDescription>Buat salinan file ini di Shared Drive.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-2">
@@ -492,8 +489,8 @@ export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview
             </AlertDialogTitle>
             <AlertDialogDescription>
               {isFolder
-                ? `Folder "${file.name}" beserta seluruh isinya akan dihapus permanen dari Google Drive ${file.accountEmail}. Tindakan ini tidak bisa dibatalkan.`
-                : `"${file.name}" akan dihapus permanen dari Google Drive ${file.accountEmail}. Tindakan ini tidak bisa dibatalkan.`}
+                ? `Folder "${file.name}" beserta seluruh isinya akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.`
+                : `"${file.name}" akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

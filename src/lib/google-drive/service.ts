@@ -61,7 +61,8 @@ export class GoogleDriveService {
     const params = new URLSearchParams({
       q: driveQ,
       pageSize: String(options.pageSize ?? 100),
-      fields: 'nextPageToken,files(id,name,mimeType,size,modifiedTime,parents,webViewLink)',
+      fields:
+        'nextPageToken,files(id,name,mimeType,size,modifiedTime,parents,webViewLink,owners(emailAddress))',
       orderBy: options.orderBy ?? 'modifiedTime desc',
       spaces: 'drive',
     });
@@ -77,6 +78,7 @@ export class GoogleDriveService {
         modifiedTime?: string;
         parents?: string[];
         webViewLink?: string;
+        owners?: Array<{ emailAddress?: string }>;
       }>;
     };
     const files: DriveFileDto[] = (body.files ?? []).map((f) => ({
@@ -89,6 +91,7 @@ export class GoogleDriveService {
       webViewLink: f.webViewLink ?? null,
       accountId: this.account.id,
       accountEmail: this.account.email,
+      ownerEmail: f.owners?.[0]?.emailAddress ?? null,
     }));
     return { files, nextPageToken: body.nextPageToken ?? null };
   }

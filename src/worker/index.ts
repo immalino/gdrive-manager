@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { googleAccounts } from '@/db/schema';
+import { googleAccounts, sharedRoots } from '@/db/schema';
 import { syncQuota } from '@/lib/quota';
 import { checkAccountHealth } from '@/lib/google/health';
 import { indexAccountFiles } from '@/lib/google-drive/indexer';
@@ -43,7 +43,16 @@ export async function indexAll() {
     .where(eq(googleAccounts.status, 'connected'));
   for (const account of accounts) {
     await safe(`index ${account.email}`, async () => {
-      const count = await indexAccountFiles(account);
+      let sharedRootId: string | undefined;
+      try {
+        const root = await db.query?.sharedRoots?.findFirst({
+          where: eq(sharedRoots.userId, account.userId),
+        });
+        sharedRootId = root?.driveFolderId;
+      } catch {
+        // ignore
+      }
+      const count = await indexAccountFiles(account, sharedRootId);
       console.log(`[worker] ${account.email}: ${count} file terindeks`);
     });
   }
