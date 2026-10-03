@@ -19,23 +19,44 @@ export async function resolveFileAccount(
   if (accountIdParam) {
     return await getAccountForUser(userId, accountIdParam);
   }
+
   const record = await db
     .select({ account: googleAccounts })
     .from(driveFiles)
     .innerJoin(googleAccounts, eq(driveFiles.googleAccountId, googleAccounts.id))
     .where(and(eq(driveFiles.driveFileId, fileId), eq(googleAccounts.userId, userId)))
     .limit(1);
-  if (record.length > 0) {
+
+  if (record && record.length > 0) {
     return record[0].account;
   }
+
+  const userAccounts =
+    (await db.select().from(googleAccounts).where(eq(googleAccounts.userId, userId))) || [];
   const setupStatus = await getSetupStatus(userId);
+  const probeAccount = setupStatus.primaryAccount ?? userAccounts[0];
+
+  if (probeAccount) {
+    try {
+      const probeService = await GoogleDriveService.forAccount(probeAccount);
+      const meta = await probeService.getFile(fileId, 'id,name,owners(emailAddress)');
+      if (meta.ownerEmail) {
+        const matching = userAccounts.find(
+          (a) => a.email.toLowerCase() === meta.ownerEmail?.toLowerCase(),
+        );
+        if (matching) {
+          return matching;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   if (setupStatus.primaryAccount) {
     return setupStatus.primaryAccount;
   }
-  const first = await db.query.googleAccounts.findFirst({
-    where: eq(googleAccounts.userId, userId),
-  });
-  if (first) return first;
+  if (userAccounts.length > 0) return userAccounts[0];
   throw new AppError('NOT_FOUND', 'Akun tidak ditemukan untuk file ini.', 404);
 }
 
@@ -45,9 +66,38 @@ export const DELETE = withAuth<Ctx>(async (user, req, ctx) => {
     throw new AppError('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
   const { id } = await ctx.params;
   const accountId = req.nextUrl.searchParams.get('accountId');
-  const account = await resolveFileAccount(user.id, id, accountId);
-  const service = await GoogleDriveService.forAccount(account);
-  await service.deleteFile(id);
+  let account = await resolveFileAccount(user.id, id, accountId);
+  let service = await GoogleDriveService.forAccount(account);
+  try {
+    await service.deleteFile(id);
+  } catch (err: unknown) {
+    // If permission denied (403), probe actual owner via Google Drive API
+    const setupStatus = await getSetupStatus(user.id);
+    const probeAccount = setupStatus.primaryAccount ?? account;
+    let resolved = false;
+    try {
+      const probeService = await GoogleDriveService.forAccount(probeAccount);
+      const meta = await probeService.getFile(id, 'id,name,owners(emailAddress)');
+      if (meta.ownerEmail) {
+        const userAccounts = await db
+          .select()
+          .from(googleAccounts)
+          .where(eq(googleAccounts.userId, user.id));
+        const realOwner = userAccounts.find(
+          (a) => a.email.toLowerCase() === meta.ownerEmail?.toLowerCase(),
+        );
+        if (realOwner && realOwner.id !== account.id) {
+          account = realOwner;
+          service = await GoogleDriveService.forAccount(realOwner);
+          await service.deleteFile(id);
+          resolved = true;
+        }
+      }
+    } catch {
+      // probe failed
+    }
+    if (!resolved) throw err;
+  }
   await db.delete(driveFiles).where(eq(driveFiles.driveFileId, id));
   await logActivity({
     userId: user.id,

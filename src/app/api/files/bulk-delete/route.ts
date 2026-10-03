@@ -37,10 +37,10 @@ export const POST = withAuth(async (user, req) => {
   const setupStatus = await getSetupStatus(user.id);
   const defaultAccountId = setupStatus.primaryAccount?.id ?? userAccounts[0]?.id;
 
-  // Resolve missing accountIds from driveFiles
-  const missingAccItemIds = body.items.filter((item) => !item.accountId).map((item) => item.id);
-  if (missingAccItemIds.length > 0) {
-    const foundRecords = await db
+  // Resolve accountIds from driveFiles for all items (preferring DB record over client hint)
+  const allItemIds = body.items.map((item) => item.id);
+  const foundRecords =
+    (await db
       .select({
         driveFileId: driveFiles.driveFileId,
         googleAccountId: driveFiles.googleAccountId,
@@ -48,13 +48,15 @@ export const POST = withAuth(async (user, req) => {
       .from(driveFiles)
       .innerJoin(googleAccounts, eq(driveFiles.googleAccountId, googleAccounts.id))
       .where(
-        and(inArray(driveFiles.driveFileId, missingAccItemIds), eq(googleAccounts.userId, user.id)),
-      );
-    const idToAcc = new Map(foundRecords.map((r) => [r.driveFileId, r.googleAccountId]));
-    for (const item of body.items) {
-      if (!item.accountId) {
-        item.accountId = idToAcc.get(item.id) ?? defaultAccountId;
-      }
+        and(inArray(driveFiles.driveFileId, allItemIds), eq(googleAccounts.userId, user.id)),
+      )) || [];
+  const idToAcc = new Map(foundRecords.map((r) => [r.driveFileId, r.googleAccountId]));
+  for (const item of body.items) {
+    const dbAccountId = idToAcc.get(item.id);
+    if (dbAccountId) {
+      item.accountId = dbAccountId;
+    } else if (!item.accountId) {
+      item.accountId = defaultAccountId;
     }
   }
 
@@ -76,12 +78,37 @@ export const POST = withAuth(async (user, req) => {
   }
 
   const results = await runBatchPool(body.items, 5, async ({ id, accountId, name }) => {
-    const service = await getService(accountId);
-    await service.deleteFile(id);
+    let currentAccountId = accountId;
+    const service = await getService(currentAccountId);
+    try {
+      await service.deleteFile(id);
+    } catch (err: unknown) {
+      // If permission denied (403), probe actual owner via Google Drive API
+      let resolved = false;
+      try {
+        const probeService = defaultAccountId ? await getService(defaultAccountId) : service;
+        const meta = await probeService.getFile(id, 'id,name,owners(emailAddress)');
+        if (meta.ownerEmail) {
+          const realOwner = userAccounts.find(
+            (a) => a.email.toLowerCase() === meta.ownerEmail?.toLowerCase(),
+          );
+          if (realOwner && realOwner.id !== currentAccountId) {
+            const realService = await getService(realOwner.id);
+            await realService.deleteFile(id);
+            currentAccountId = realOwner.id;
+            resolved = true;
+          }
+        }
+      } catch {
+        // probe failed
+      }
+      if (!resolved) throw err;
+    }
+
     await db.delete(driveFiles).where(eq(driveFiles.driveFileId, id));
     await logActivity({
       userId: user.id,
-      googleAccountId: accountId,
+      googleAccountId: currentAccountId,
       action: 'file.delete',
       fileId: id,
       metadata: { bulk: true, name },

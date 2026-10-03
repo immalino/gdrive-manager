@@ -450,9 +450,10 @@ export class GoogleDriveService {
 
   async getFile(
     fileId: string,
-    fields: string = 'id,name,mimeType,parents,webViewLink,modifiedTime,size',
+    fields: string = 'id,name,mimeType,parents,webViewLink,modifiedTime,size,owners(emailAddress)',
   ): Promise<DriveFileDto> {
     const res = await this.request(`/files/${fileId}?fields=${encodeURIComponent(fields)}`);
+    if (!res.ok) throw await mapGoogleError(res, this.account);
     const f = (await res.json()) as {
       id: string;
       name: string;
@@ -461,6 +462,7 @@ export class GoogleDriveService {
       modifiedTime?: string;
       parents?: string[];
       webViewLink?: string;
+      owners?: Array<{ emailAddress?: string }>;
     };
     return {
       id: f.id,
@@ -472,6 +474,7 @@ export class GoogleDriveService {
       webViewLink: f.webViewLink ?? null,
       accountId: this.account.id,
       accountEmail: this.account.email,
+      ownerEmail: f.owners?.[0]?.emailAddress ?? null,
     };
   }
 }

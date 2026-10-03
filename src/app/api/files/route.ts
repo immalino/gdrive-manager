@@ -1,4 +1,4 @@
-import { and, eq, ilike, sql } from 'drizzle-orm';
+import { and, eq, ilike, ne, or, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { driveFiles, googleAccounts } from '@/db/schema';
 import { AppError } from '@/lib/errors';
@@ -79,6 +79,17 @@ export const GET = withAuth(async (user, req) => {
 
   const accountIdsParam = sp.get('accountIds');
   const accounts = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, user.id));
+  const emailToAccount = new Map(accounts.map((a) => [a.email.toLowerCase(), a]));
+
+  function resolveFileOwner(file: DriveFileDto) {
+    if (file.ownerEmail) {
+      const ownerAcc = emailToAccount.get(file.ownerEmail.toLowerCase());
+      if (ownerAcc) {
+        file.accountId = ownerAcc.id;
+        file.accountEmail = ownerAcc.email;
+      }
+    }
+  }
 
   let targets = accounts;
   if (!recent && accountIdsParam !== null && accountIdsParam !== '') {
@@ -187,6 +198,7 @@ export const GET = withAuth(async (user, req) => {
       });
       const seenIds = new Set<string>();
       for (const f of rawFiles) {
+        resolveFileOwner(f);
         if (!seenIds.has(f.id)) {
           seenIds.add(f.id);
           files.push(f);
@@ -202,6 +214,12 @@ export const GET = withAuth(async (user, req) => {
         files = files.filter((f) => f.sizeBytes != null && f.sizeBytes < sizeMax);
       }
       if (files.length > 0) {
+        const cleanupConditions = files.map((f) =>
+          and(eq(driveFiles.driveFileId, f.id), ne(driveFiles.googleAccountId, f.accountId)),
+        );
+        if (cleanupConditions.length > 0) {
+          await db.delete(driveFiles).where(or(...cleanupConditions));
+        }
         await db
           .insert(driveFiles)
           .values(
@@ -259,6 +277,7 @@ export const GET = withAuth(async (user, req) => {
 
     const seenIds = new Set<string>();
     for (const f of rawFiles) {
+      resolveFileOwner(f);
       if (!seenIds.has(f.id)) {
         seenIds.add(f.id);
         files.push(f);
@@ -284,6 +303,12 @@ export const GET = withAuth(async (user, req) => {
     }
 
     if (files.length > 0) {
+      const cleanupConditions = files.map((f) =>
+        and(eq(driveFiles.driveFileId, f.id), ne(driveFiles.googleAccountId, f.accountId)),
+      );
+      if (cleanupConditions.length > 0) {
+        await db.delete(driveFiles).where(or(...cleanupConditions));
+      }
       await db
         .insert(driveFiles)
         .values(
