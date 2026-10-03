@@ -14,21 +14,22 @@ const SORT_KEYS: SortKey[] = ['name', 'size', 'modified'];
 
 export const GET = withAuth(async (user, req) => {
   const sp = req.nextUrl.searchParams;
+  const recent = sp.get('recent') === '1';
   const accountId = sp.get('accountId');
-  const search = sp.get('search') ?? undefined;
-  const kindParam = sp.get('kind');
-  const sortParam = sp.get('sort');
-  const dir = sp.get('dir') === 'asc' ? 'asc' : 'desc';
+  const search = recent ? undefined : (sp.get('search') ?? undefined);
+  const kindParam = recent ? undefined : sp.get('kind');
+  const sortParam = recent ? 'modified' : sp.get('sort');
+  const dir = recent ? 'desc' : (sp.get('dir') === 'asc' ? 'asc' : 'desc');
 
   const ALLOWED_KINDS: string[] = [...FILE_KINDS, 'folder'];
-  if (kindParam && kindParam !== 'all' && !ALLOWED_KINDS.includes(kindParam)) {
+  if (!recent && kindParam && kindParam !== 'all' && !ALLOWED_KINDS.includes(kindParam)) {
     throw new AppError('VALIDATION', 'Jenis file tidak dikenal.', 400);
   }
-  if (sortParam && !SORT_KEYS.includes(sortParam as SortKey)) {
+  if (!recent && sortParam && !SORT_KEYS.includes(sortParam as SortKey)) {
     throw new AppError('VALIDATION', 'Kunci urutan tidak dikenal.', 400);
   }
-  const kind = !kindParam || kindParam === 'all' ? undefined : (kindParam as FileKind);
-  const sort = (sortParam as SortKey | null) ?? 'modified';
+  const kind = recent || !kindParam || kindParam === 'all' ? undefined : (kindParam as FileKind);
+  const sort = recent ? 'modified' : ((sortParam as SortKey | null) ?? 'modified');
 
   const accounts = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, user.id));
   const targets = accountId ? accounts.filter((a) => a.id === accountId) : accounts;
@@ -36,10 +37,11 @@ export const GET = withAuth(async (user, req) => {
     throw new AppError('NOT_FOUND', 'Akun tidak ditemukan.', 404);
 
   const q = buildDriveQuery({ search, kind });
+  const pageSize = recent ? 8 : MAX_PER_ACCOUNT;
   const results = await Promise.allSettled(
     targets.map(async (account) => {
       const service = await GoogleDriveService.forAccount(account);
-      const { files } = await service.listFiles({ q, pageSize: MAX_PER_ACCOUNT });
+      const { files } = await service.listFiles({ q, pageSize });
       return files;
     }),
   );
@@ -51,7 +53,7 @@ export const GET = withAuth(async (user, req) => {
     else failedAccounts.push(targets[i]!.email);
   });
 
-  if (kind === 'other' || kind === 'folder') {
+  if (!recent && (kind === 'other' || kind === 'folder')) {
     const filtered = files.filter((f) => classifyMime(f.mimeType) === kind);
     files.length = 0;
     files.push(...filtered);
@@ -87,5 +89,6 @@ export const GET = withAuth(async (user, req) => {
       });
   }
 
-  return ok({ files: sortFiles(files, sort, dir), failedAccounts });
+  const sorted = sortFiles(files, sort, dir);
+  return ok({ files: recent ? sorted.slice(0, 8) : sorted, failedAccounts });
 });

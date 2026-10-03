@@ -55,6 +55,20 @@ describe('sortFiles', () => {
     ]);
   });
 
+  it('recent files: sort modified desc dan batasi ke 8 file', () => {
+    const manyFiles = Array.from({ length: 15 }, (_, i) =>
+      file({
+        id: `f-${i}`,
+        name: `file-${i}.txt`,
+        modifiedAt: new Date(Date.UTC(2026, 0, i + 1)).toISOString(),
+      }),
+    );
+    const recent = sortFiles(manyFiles, 'modified', 'desc').slice(0, 8);
+    expect(recent).toHaveLength(8);
+    expect(recent[0]?.name).toBe('file-14.txt');
+    expect(recent[7]?.name).toBe('file-7.txt');
+  });
+
   it('tidak mengubah array input', () => {
     const input = [...files];
     sortFiles(input, 'name', 'asc');

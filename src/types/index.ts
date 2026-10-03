@@ -38,3 +38,16 @@ export interface FilesResponse {
   files: DriveFileDto[];
   failedAccounts: string[];
 }
+
+export interface ActivityItem {
+  id: string;
+  action: string;
+  fileId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  email: string | null;
+}
+
+export interface ActivityResponse {
+  activity: ActivityItem[];
+}

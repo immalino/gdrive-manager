@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { FilesTable } from '@/components/files/files-table';
 import { FILE_KINDS } from '@/lib/files/mime';
 import type { SortKey } from '@/lib/files/merge';
@@ -33,7 +34,9 @@ export default async function FilesPage({ searchParams }: FilesPageProps) {
           Jelajahi file dari seluruh akun Google Drive.
         </p>
       </div>
-      <FilesTable initial={initial} />
+      <Suspense fallback={null}>
+        <FilesTable initial={initial} />
+      </Suspense>
     </div>
   );
 }

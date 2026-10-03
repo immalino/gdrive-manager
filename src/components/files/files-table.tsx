@@ -12,6 +12,7 @@ import {
   Video,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -98,6 +99,9 @@ function buildFilesParams(filters: FilesInitialFilters, includeDefaults = false)
 }
 
 export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
+  const searchParams = useSearchParams();
+  const urlSearch = searchParams.get("search") ?? "";
+  const lastUrlSearchRef = useRef(urlSearch);
   const [searchInput, setSearchInput] = useState(initial.search);
   const [search, setSearch] = useState(initial.search);
   const [accountId, setAccountId] = useState(initial.accountId || 'all');
@@ -109,6 +113,14 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
     () => ({ search, accountId, kind, sort, dir }),
     [search, accountId, kind, sort, dir],
   );
+
+  useEffect(() => {
+    if (urlSearch !== lastUrlSearchRef.current) {
+      lastUrlSearchRef.current = urlSearch;
+      setSearchInput(urlSearch);
+      setSearch(urlSearch);
+    }
+  }, [urlSearch]);
 
   useEffect(() => {
     if (searchInput === search) return;
