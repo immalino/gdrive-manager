@@ -3,7 +3,15 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { Activity, FolderOpen, LayoutDashboard, Menu, Settings, Users } from 'lucide-react';
+import {
+  Activity,
+  BarChart3,
+  FolderOpen,
+  LayoutDashboard,
+  Menu,
+  Settings,
+  Users,
+} from 'lucide-react';
 import { cn } from 'cn';
 import { buttonVariants } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -19,6 +27,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/files', label: 'Files', icon: FolderOpen },
   { href: '/dashboard/accounts', label: 'Accounts', icon: Users },
   { href: '/dashboard/activity', label: 'Activity', icon: Activity },
+  { href: '/dashboard/stats', label: 'Stats', icon: BarChart3 },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 

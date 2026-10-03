@@ -51,6 +51,42 @@ export interface ActivityItem {
 
 export interface ActivityResponse {
   activity: ActivityItem[];
+  page?: number;
+  pageSize?: number;
+}
+
+export interface StatsTotals {
+  totalBytes: number | null;
+  usedBytes: number;
+  freeBytes: number | null;
+  accountCount: number;
+}
+
+export interface FileKindStat {
+  kind: string;
+  count: number;
+  totalSize: number;
+}
+
+export interface SnapshotHistoryItem {
+  id: string;
+  googleAccountId: string;
+  totalBytes: number | null;
+  usedBytes: number;
+  freeBytes: number | null;
+  createdAt: string;
+}
+
+export interface ActionCountItem {
+  action: string;
+  count: number;
+}
+
+export interface StatsResponse {
+  totals: StatsTotals;
+  fileKinds: FileKindStat[];
+  snapshotHistory: SnapshotHistoryItem[];
+  actionCounts: ActionCountItem[];
 }
 
 export interface FolderItem {

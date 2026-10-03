@@ -77,7 +77,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 8 | Error handling, health status, keamanan, responsive, acceptance MVP | ✅ | 2026-10-03 | Pipeline lulus (33 unit test, build, lint, format:check). Async `mapGoogleError`, error boundary global + dashboard, status health badge + reconnect button, rate limit mutasi 30/min, audit keamanan lulus 100%, `pnpm format` merapikan seluruh file (DoD format:check bersih), README.md lengkap + acceptance MVP checklist tercentang. MVP Selesai. |
 | 9 | Phase 2: Move, Rename, Copy file | ✅ | 2026-10-03 | Pipeline lulus (40 unit test, build, lint, format:check). Rename & move (file/folder) via PATCH /api/files/[id] & /api/folders/[id], copy file via POST /api/files/[id]/copy, folder list via GET /api/folders. UI: DropdownMenu per baris dengan dialog Rename, Move (folder picker), Copy (file), dan Delete confirmation. Live curl terverifikasi: rename file/folder, move file ke folder & kembali ke root, copy file, delete folder, activity logs tercatat. Copy/move lintas akun belum didukung (hanya dalam 1 akun sesuai PRD Phase 2). |
 | 10 | Phase 2: Automatic account selection (Mode B) | ✅ | 2026-10-03 | Pipeline lulus (46 unit test, build, lint, format:check). Algoritma selectAccount (PRD §6.3) memilih akun dengan sisa ruang terbesar yang muat file. Upload API mendukung ?mode=auto dengan auto-quota sync & auto-selection. UploadDialog UI memiliki radio Automatic / Specific account dengan panel preview evaluasi kandidat per file (✅/❌) dan proteksi QUOTA_EXCEEDED. Live curl terverifikasi: auto upload ke akun terbesar, reject 413 file melebihi kapasitas seluruh akun, manual mode tetap berfungsi. |
-| 11 | Phase 2: Activity log page + Statistik storage/file | ⬜ | | |
+| 11 | Phase 2: Activity log page + Statistik storage/file | ✅ | 2026-10-03 | Pipeline lulus (52 unit test, build, lint, format:check). API /api/activity mendukung filter action, accountId, dan pagination; API /api/stats menyediakan ringkasan storage, fileKinds, snapshotHistory (AreaChart), dan actionCounts. Halaman /dashboard/activity (ActivityTable) dan /dashboard/stats (StatsCards + StatsCharts) berfungsi penuh; menu Stats ditambahkan ke sidebar; isolasi cross-user teruji aman; statistik bergantung pada kelengkapan index drive_files yang akan diperbarui oleh background sync di Sesi 12. |
 | 12 | Phase 2: Background sync (worker) + account health monitoring | ⬜ | | |
 | 13 | Phase 2: Advanced search + file preview | ⬜ | | |
 
@@ -122,6 +122,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 8: `mapGoogleError` diubah jadi async (mengurai reason dari clone JSON Google API); error boundary `src/app/dashboard/error.tsx` dan `src/app/error.tsx` dibuat; `api/storage` menyertakan `updatedAt` untuk kolom baru di `AccountsTable`; badge status diperbarui (connected = secondary, reconnect_required = amber, error = destructive) dengan tombol Reconnect; rate limit mutasi (30 req/min/user) dipasang di seluruh route mutasi; tombol Refresh di Header dihubungkan ke mutation refresh; `pnpm format` merapikan seluruh file lama sehingga `pnpm format:check` lulus 100%; audit keamanan 6 poin lulus; README.md ditulis lengkap beserta Acceptance Criteria MVP.
 - Sesi 9: Rename, Move, Copy file dan Folder management selesai; aksi dapat diakses via DropdownMenu per baris tabel maupun dialog modal; move antar folder dan copy file beroperasi dalam 1 akun (lintas akun di luar scope Phase 2); activity logs mencatat file.rename, file.move, file.copy, file.delete, folder.create.
 - Sesi 10: Automatic account selection (Mode B) diimplementasikan di lib/upload/select-account.ts dan diintegrasikan ke POST /api/files/upload (?mode=auto) serta UploadDialog (radio destination + panel preview calon akun per file). Validasi mode auto tidak mewajibkan accountId. Sync quota dipanggil saat seleksi dan setelah upload selesai.
+- Sesi 11: Recharts dipasang untuk visualisasi statistik; `useSyncExternalStore` digunakan pada render chart client untuk menghindari hydration mismatch dan aturan react-hooks/set-state-in-effect; kalkulasi totals dan aggregasi file kinds diisolasi di `src/lib/stats.ts` dan dilindungi unit test; GET /api/activity mendukung filter action & accountId (dengan proteksi user_id) serta pagination; halaman /dashboard/activity dan /dashboard/stats aktif dengan visualisasi dan tabel lengkap; menu Stats ditambahkan ke Sidebar.
 ```
 
 ---
@@ -3244,13 +3245,13 @@ git add -A && git commit -m "feat: automatic account selection for uploads (mode
 
 ### Langkah-langkah
 
-- [ ] **1. Install recharts**
+- [x] **1. Install recharts**
 
 ```bash
 pnpm add recharts
 ```
 
-- [ ] **2. API activity lengkap**
+- [x] **2. API activity lengkap**
 
 Perbarui `src/app/api/activity/route.ts` — tambahkan query param `action`, `accountId`, `page` (default 1), `pageSize` (default 20, max 100):
 
@@ -3296,7 +3297,7 @@ export const GET = withAuth(async (user, req) => {
 });
 ```
 
-- [ ] **3. API statistik**
+- [x] **3. API statistik**
 
 Buat `src/app/api/stats/route.ts`:
 
@@ -3355,7 +3356,7 @@ export const GET = withAuth(async (user) => {
 
 > Jika Drizzle gagal mem-parsing `in ${array}`, tulis dengan `sql.join`/parameter binding eksplisit: `` sql`${driveFiles.googleAccountId} in (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})` `` — pastikan query jalan (uji lewat endpoint).
 
-- [ ] **4. Halaman Activity**
+- [x] **4. Halaman Activity**
 
 Buat `src/components/activity/activity-table.tsx` (client):
 - Filter: Select action (semua aksi dari `ActivityAction`), Select akun (dari `GET /api/storage`).
@@ -3365,7 +3366,7 @@ Buat `src/components/activity/activity-table.tsx` (client):
 
 `src/app/dashboard/activity/page.tsx` → render `<ActivityTable />`.
 
-- [ ] **5. Halaman Statistik**
+- [x] **5. Halaman Statistik**
 
 Buat `src/components/stats/stats-cards.tsx` + `stats-charts.tsx`:
 - Ringkasan: Total / Used / Free / Accounts + **Total Files** (jumlah semua `fileKinds`).
@@ -3377,7 +3378,7 @@ Buat `src/components/stats/stats-cards.tsx` + `stats-charts.tsx`:
 
 Tambahkan menu **Stats** (`/dashboard/stats`, ikon `BarChart3`) di `src/components/layout/sidebar.tsx` setelah Activity.
 
-- [ ] **6. Pipeline + commit**
+- [x] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -3386,17 +3387,17 @@ git add -A && git commit -m "feat: activity log page and storage/file statistics
 
 ### Verifikasi
 
-- [ ] Halaman Activity menampilkan aksi dari sesi sebelumnya (upload/delete/rename/move), filter action & akun berfungsi, pagination jalan
-- [ ] `GET /api/activity?action=file.upload` hanya berisi `file.upload`
-- [ ] Halaman Stats: Total/Used/Free **sama** dengan Dashboard; Total Files ≥ jumlah file yang pernah terlihat di Files
-- [ ] Distribusi jenis file masuk akal (Images/Images sesuai isi Drive); chart riwayat tampil setelah ≥2 snapshot
-- [ ] Query cross-user aman: user kedua (buat akun baru) tidak melihat activity/stats user pertama
-- [ ] Pipeline lulus
+- [x] Halaman Activity menampilkan aksi dari sesi sebelumnya (upload/delete/rename/move), filter action & akun berfungsi, pagination jalan
+- [x] `GET /api/activity?action=file.upload` hanya berisi `file.upload`
+- [x] Halaman Stats: Total/Used/Free **sama** dengan Dashboard; Total Files ≥ jumlah file yang pernah terlihat di Files
+- [x] Distribusi jenis file masuk akal (Images/Images sesuai isi Drive); chart riwayat tampil setelah ≥2 snapshot
+- [x] Query cross-user aman: user kedua (buat akun baru) tidak melihat activity/stats user pertama
+- [x] Pipeline lulus
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 11
-- [ ] Update baris **Sesi 11** di tracker: ✅, tanggal, catatan (mis. "statistik bergantung pada kelengkapan index `drive_files`; background sync Sesi 12 memperbarui index")
+- [x] Commit terakhir sesi 11
+- [x] Update baris **Sesi 11** di tracker: ✅, tanggal, catatan (mis. "statistik bergantung pada kelengkapan index `drive_files`; background sync Sesi 12 memperbarui index")
 
 ---
 
