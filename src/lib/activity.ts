@@ -11,7 +11,9 @@ export type ActivityAction =
   | 'folder.create'
   | 'file.rename'
   | 'file.move'
-  | 'file.copy';
+  | 'file.copy'
+  | 'setup.init'
+  | 'setup.share';
 
 export async function logActivity(input: {
   userId: string;

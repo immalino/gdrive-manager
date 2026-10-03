@@ -83,8 +83,15 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 14 | Phase 3: Drag & Drop + Concurrent Upload Queue & Retry UI | ✅ | 2026-10-03 | Pipeline lulus (69 unit test, build, lint, format:check). UploadQueueManager mengontrol concurrency limit (2 paralel) dengan AbortController cancellation dan retry pool. UploadDropzone menyediakan visual drag-over dan multi-file selector. UploadQueueDrawer mengambang di pojok kanan bawah dashboard layout dengan status per-item, progress bar, tombol cancel/retry individual, dan retry all failed. FilesDropOverlay memungkinkan drag-and-drop langsung file dari desktop di halaman Files ke antrean upload mode auto/aktif. |
 | 15 | Phase 3: Large File Resumable Upload & Network Resilience | ✅ | 2026-10-03 | Pipeline lulus (81 unit test, build, lint, format:check). Skema upload_jobs diperluas (resumable_uri & uploaded_bytes). GoogleDriveService mendukung initiateResumableSession, getResumableOffset, dan uploadChunk. API /api/files/upload/session, /chunk, dan /session/[id]/status aktif. Helper uploadFileChunked (chunk 5MB, threshold 10MB) terintegrasi dengan UploadQueueManager dan drawer. Live verifikasi lulus: upload 50 MB bertahap (10 chunk), interupsi koneksi pada 50% (offset 26.214.400) dan resume berhasil hingga 100%, checksum SHA-256 identik, DB upload_jobs completed, storage snapshot ter-update, file uji dibersihkan dari Google Drive. |
 | 16 | Phase 3: Multi-Select Table & Bulk Operations (Delete & Move) | ✅ | 2026-10-03 | Pipeline lulus (87 unit test, build, lint, format:check). Row selection TanStack Table v9 dengan checkbox Base UI & shift-click range; floating BulkActionBar; API /api/files/bulk-delete & /api/files/bulk-move dengan pool concurrency 5 (runBatchPool); dialog BulkDeleteDialog & BulkMoveDialog dengan visual progress, fault isolation, dan peringatan/pengelompokan multi-akun. |
-| 17 | Phase 3: Storage Balancing Engine & Cross-Account File Migration | ⬜ | — | Algoritma deteksi ketimpangan storage, rekomendasi rebalance akun, API & pipeline streaming migrasi file lintas akun (`POST /api/files/migrate`). |
-| 18 | Phase 3: Distributed Rate Limiter & Production Hardening | ⬜ | — | Rate limiter PostgreSQL sliding window (multi-instance/VPS), worker heartbeat status di UI, audit keamanan & acceptance run-through Phase 3. |
+| 17 | ~~Phase 3: Storage Balancing Engine & Cross-Account File Migration~~ | 🚫 | — | **DIBATALKAN** — digantikan oleh Phase 4 (Shared Virtual Drive). Fitur storage balancing & migration akan diadaptasi di Sesi 24. |
+| 18 | ~~Phase 3: Distributed Rate Limiter & Production Hardening~~ | 🚫 | — | **DIBATALKAN** — digantikan oleh Phase 4. Hardening & distributed rate limit masuk Sesi 25. |
+| 19 | Phase 4: Schema Migration + Setup Wizard (Shared Root) | ✅ | 2026-10-03 | Pipeline lulus (95 unit test, build, lint, format:check). Skema DB baru (shared_roots, shared_permissions, role di google_accounts) ter-generate & migrate. GoogleDriveService diperluas (createSharedRootFolder, shareFolder, revokePermission). Endpoint /api/setup/init, /status, /share/[accountId] aktif. SetupWizard UI multi-step di /dashboard/setup dengan auto-redirect guard (Next.js 16 proxy.ts + SetupGuard). OAuth callback auto-share ke akun pool baru. Live curl terverifikasi: folder root dibuat di Google Drive asli, role primary/pool ter-set, permission Google Editor terbit dan tercatat di DB, activity logs setup.init & setup.share tersimpan, guard redirect /dashboard <-> /dashboard/setup bekerja dua arah. |
+| 20 | Phase 4: File Browser — Folder Navigation + Breadcrumb | ⬜ | — | UI file browser mirip GDrive: navigasi folder, breadcrumb, folder tree sidebar, refactor file listing dari flat ke folder-scoped. |
+| 21 | Phase 4: Upload ke Shared Folder + Folder Creation by Primary | ⬜ | — | Refactor upload agar target = shared folder saat ini, folder creation selalu pakai akun utama, auto account selection tetap berlaku. |
+| 22 | Phase 4: Refactor File Operations untuk Shared Drive | ⬜ | — | Adaptasi download/delete/rename/move/copy/bulk ops agar bekerja dalam konteks shared folder, search scoped ke shared root. |
+| 23 | Phase 4: UI Revamp — GDrive-like Interface | ⬜ | — | Sidebar baru (My Drive, Recent, Storage bar), file browser grid/list view, drag & drop dalam folder context, responsive layout. |
+| 24 | Phase 4: Shared Drive Integrity + Storage Balancing (Adapted) | ⬜ | — | Worker verifikasi shared root integrity, auto-reshare akun baru, storage balancing & migration diadaptasi untuk shared folder model. |
+| 25 | Phase 4: Production Hardening + Phase 4 Acceptance | ⬜ | — | Distributed rate limit, worker heartbeat, audit keamanan, acceptance run-through Phase 4 lengkap. |
 
 **Log Sesi** (diisi bila ada keputusan penting lintas sesi):
 
@@ -320,11 +327,34 @@ Sesi 1 Foundation ─► Sesi 2 Auth ─► Sesi 3 OAuth+Enkripsi ─► Sesi 4 
                                  ▼
             Sesi 14 Drag & Drop + Upload Queue ─► Sesi 15 Large File Resumable
             Sesi 16 Bulk Delete & Move (butuh Sesi 9 & 13)
-            Sesi 17 Storage Balancing & Migration (butuh Sesi 10, 11, 12)
-            Sesi 18 Distributed Rate Limit & Hardening (Phase 3 Acceptance)
+
+            Sesi 17 Storage Balancing ──────── 🚫 DIBATALKAN (diganti Phase 4)
+            Sesi 18 Hardening ─────────────── 🚫 DIBATALKAN (diganti Phase 4)
+
+                                 ┌───────────────────────────┐
+                                 ▼   Phase 4: Shared Virtual Drive
+            Sesi 19 Schema + Setup Wizard (butuh Sesi 16)
+                         │
+                         ▼
+            Sesi 20 File Browser + Breadcrumb (butuh Sesi 19)
+                         │
+                         ▼
+            Sesi 21 Upload Shared Folder + Folder by Primary (butuh Sesi 20)
+                         │
+                         ▼
+            Sesi 22 Refactor File Ops for Shared Drive (butuh Sesi 21)
+                         │
+                         ▼
+            Sesi 23 UI Revamp GDrive-like (butuh Sesi 22)
+                         │
+                         ▼
+            Sesi 24 Shared Root Integrity + Balancing (butuh Sesi 23)
+                         │
+                         ▼
+            Sesi 25 Hardening + Phase 4 Acceptance (butuh Sesi 24)
 ```
 
-Urutan eksekusi dianjurkan: 1→2→3→4→5→6→7→8→9→10→11→12→13→14→15→16→17→18.
+Urutan eksekusi dianjurkan: 1→…→16→19→20→21→22→23→24→25.
 
 ---
 
@@ -3741,564 +3771,942 @@ git add -A && git commit -m "feat: multi-select table and bulk delete and move o
 
 ---
 
-## Sesi 17 — Storage Balancing Engine & Cross-Account File Migration
+## Sesi 17 — ~~Storage Balancing Engine & Cross-Account File Migration~~ 🚫 DIBATALKAN
 
-> **Prompt sesi baru:** `Kamu mengerjakan Sesi 17 dari implementasi.md. Baca PRD.md §3.1, §6.3, §12 Phase 3 (Storage balancing, File migration lintas akun), lalu Global Constraints + Sesi 17. Kerjakan hanya Sesi 17, verifikasi lulus, commit, update tracker.`
+> **DIBATALKAN** — Sesi ini digantikan oleh Phase 4 (Shared Virtual Drive). Fitur storage balancing & cross-account migration akan diadaptasi dalam konteks shared folder di **Sesi 24**.
 
-**Goal:** Menyediakan analisis keseimbangan storage lintas akun (skor ketimpangan / imbalance index), algoritma rekomendasi pemindahan file dari akun yang hampir penuh ke akun yang masih lapang, serta fitur migrasi file lintas akun menggunakan piped streaming (stream download dari Akun A langsung di-pipe ke upload session Akun B tanpa membebani disk VPS) dengan opsi penghapusan file asli setelah sukses.
+---
 
-**Prasyarat:** Sesi 10 (Quota selection), Sesi 11 (Stats), Sesi 12 (Sync worker & file indexing).
+## Sesi 18 — ~~Distributed Rate Limiter & Production Hardening~~ 🚫 DIBATALKAN
 
-**Consumes:** `GoogleDriveService.downloadFile`, `GoogleDriveService.uploadFile` / chunked upload, tabel `google_accounts`, `storage_snapshots`, `drive_files`, `logActivity`.
+> **DIBATALKAN** — Sesi ini digantikan oleh Phase 4. Distributed rate limiter, worker heartbeat, dan production hardening masuk **Sesi 25**.
+
+---
+
+## 7. Phase 4 — Sesi 19–25: Shared Virtual Drive
+
+> **Transformasi arsitektur besar:** Mengubah aplikasi dari "multi-account flat file listing" menjadi **Shared Virtual Drive** — satu folder root terpadu milik akun utama, di-share ke semua akun pool, dengan tampilan menyerupai Google Drive asli.
+>
+> **Referensi utama:** `PRD.md` versi 2.0 (§5 Konsep Arsitektur: Shared Virtual Drive).
+>
+> Aturan tetap berlaku: satu sesi = satu session baru, jalankan seluruh blok verifikasi, dan perbarui tracker setelah commit.
+
+---
+
+## Sesi 19 — Schema Migration + Setup Wizard (Shared Root)
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 19 dari implementasi.md. Baca PRD.md §5 (Konsep Arsitektur: Shared Virtual Drive), §6.2 (Setup Wizard), §9.3 (Database Schema), lalu Global Constraints + Sesi 19. Kerjakan hanya Sesi 19, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Menyiapkan fondasi database dan alur setup awal untuk Shared Virtual Drive: tabel baru `shared_roots` dan `shared_permissions`, kolom `role` di `google_accounts`, Setup Wizard UI, dan API untuk membuat folder root di akun utama serta men-share folder tersebut ke akun-akun pool yang sudah terhubung.
+
+**Prasyarat:** Sesi 16 (Phase 3 partial selesai).
+
+**Consumes:** Skema `google_accounts`, `GoogleDriveService`, OAuth callback, tabel `storage_snapshots`.
 
 **Produces:**
-- `src/lib/storage/balancing.ts` (algoritma analisis ketimpangan kapasitas dan engine rekomendasi pemindahan file).
-- `src/lib/google-drive/migration.ts` (service migrasi streaming in-flight antar dua akun Google).
+- Skema database baru:
+  - `src/db/schema/shared-roots.ts`: tabel `shared_roots` (`id`, `user_id`, `primary_account_id`, `drive_folder_id`, `folder_name`, `created_at`).
+  - `src/db/schema/shared-permissions.ts`: tabel `shared_permissions` (`id`, `shared_root_id`, `google_account_id`, `drive_permission_id`, `status`, `created_at`).
+  - Kolom `role` (`'primary' | 'pool'`, default `'pool'`) ditambahkan ke `google_accounts`.
+- Service baru:
+  - `src/lib/shared-drive/setup.ts`: logika setup shared root (create folder, share to accounts).
+  - `src/lib/shared-drive/permissions.ts`: logika sharing permission ke akun pool.
+- Metode baru di `GoogleDriveService`:
+  - `createSharedRootFolder(name: string)`: membuat folder di root Drive akun utama.
+  - `shareFolder(folderId: string, email: string, role: 'writer')`: share folder ke email, return permission ID.
+  - `revokePermission(folderId: string, permissionId: string)`: cabut share.
 - API Routes:
-  - `GET /api/storage/balancing`: mengembalikan status skor keseimbangan dan daftar rekomendasi pemindahan file.
-  - `POST /api/files/migrate`: mengeksekusi transfer file streaming dari akun asal ke akun tujuan.
+  - `POST /api/setup/init`: body `{ primaryAccountId, folderName? }` → buat folder root, set akun sebagai primary, share ke akun pool yang sudah ada.
+  - `GET /api/setup/status`: return `{ isSetupDone, sharedRoot?, primaryAccount? }`.
+  - `POST /api/setup/share/[accountId]`: share folder root ke satu akun pool baru.
 - UI:
-  - `src/components/stats/storage-balancing-card.tsx` (kartu analisis ketimpangan & rekomendasi di halaman Stats / Dashboard).
-  - `src/components/files/migrate-file-dialog.tsx` (dialog migrasi file dengan pilihan akun tujuan dan estimasi sisa ruang).
-  - Aksi "Migrate to another account" pada dropdown file di `FilesTable`.
-- Unit test `src/lib/__tests__/storage-balancing.test.ts`.
+  - `src/components/setup/setup-wizard.tsx`: wizard multi-step (pilih primary account → buat folder → tambah akun pool → selesai).
+  - `src/app/dashboard/setup/page.tsx`: halaman setup wizard.
+  - Guard di `dashboard/layout.tsx`: jika setup belum selesai, redirect ke `/dashboard/setup`.
+- Modifikasi callback OAuth:
+  - Setelah akun baru terhubung, jika shared root sudah ada, otomatis share folder root ke akun baru dan catat di `shared_permissions`.
+- Unit test `src/lib/__tests__/shared-drive-setup.test.ts`.
 
 ### Langkah-langkah
 
-- [ ] **1. Unit test algoritma storage balancing & rekomendasi (merah)**
+- [x] **1. Skema database baru**
 
-Buat `src/lib/__tests__/storage-balancing.test.ts`:
+Buat `src/db/schema/shared-roots.ts`:
 
 ```ts
-import { describe, expect, it } from 'vitest';
-import { calculateStorageImbalance, getBalancingRecommendations } from '@/lib/storage/balancing';
+import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { randomUUID } from 'node:crypto';
+import { user } from './auth';
+import { googleAccounts } from './google-accounts';
 
-describe('Storage Balancing Engine', () => {
-  it('menghitung skor ketimpangan penyimpanan dengan benar', () => {
-    // 2 akun seimbang (keduanya 50% used)
-    const balancedAccounts = [
-      { id: '1', email: 'a@gmail.com', usedBytes: 50, totalBytes: 100 },
-      { id: '2', email: 'b@gmail.com', usedBytes: 50, totalBytes: 100 },
-    ];
-    const resBalanced = calculateStorageImbalance(balancedAccounts);
-    expect(resBalanced.imbalanceRatio).toBe(0);
-    expect(resBalanced.isImbalanced).toBe(false);
-
-    // 2 akun timpang (akun 1 = 90%, akun 2 = 10%)
-    const imbalancedAccounts = [
-      { id: '1', email: 'a@gmail.com', usedBytes: 90, totalBytes: 100 },
-      { id: '2', email: 'b@gmail.com', usedBytes: 10, totalBytes: 100 },
-    ];
-    const resImbalanced = calculateStorageImbalance(imbalancedAccounts);
-    expect(resImbalanced.imbalanceRatio).toBeGreaterThan(0.3);
-    expect(resImbalanced.isImbalanced).toBe(true);
-  });
-
-  it('memberikan rekomendasi file besar dari akun penuh ke akun lapang', () => {
-    const accounts = [
-      { id: 'full', email: 'full@gmail.com', usedBytes: 14 * 1024 ** 3, totalBytes: 15 * 1024 ** 3 }, // 93%
-      { id: 'empty', email: 'empty@gmail.com', usedBytes: 2 * 1024 ** 3, totalBytes: 15 * 1024 ** 3 }, // 13%
-    ];
-
-    const files = [
-      { id: 'f1', name: 'large.zip', sizeBytes: 4 * 1024 ** 3, googleAccountId: 'full' },
-      { id: 'f2', name: 'small.txt', sizeBytes: 1024, googleAccountId: 'full' },
-    ];
-
-    const recs = getBalancingRecommendations(accounts, files);
-    expect(recs.length).toBeGreaterThan(0);
-    expect(recs[0]?.fileId).toBe('f1');
-    expect(recs[0]?.sourceAccountId).toBe('full');
-    expect(recs[0]?.targetAccountId).toBe('empty');
-  });
+export const sharedRoots = pgTable('shared_roots', {
+  id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  primaryAccountId: text('primary_account_id').notNull().references(() => googleAccounts.id, { onDelete: 'cascade' }),
+  driveFolderId: text('drive_folder_id').notNull(),
+  folderName: text('folder_name').notNull().default('GDrive Pool'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 ```
 
-Jalankan `pnpm test src/lib/__tests__/storage-balancing.test.ts` → FAIL.
-
-- [ ] **2. Implementasi storage balancing engine**
-
-Buat `src/lib/storage/balancing.ts`:
+Buat `src/db/schema/shared-permissions.ts`:
 
 ```ts
-export interface StorageAccountSummary {
-  id: string;
-  email: string;
-  usedBytes: number;
-  totalBytes: number | null;
+import { pgTable, text, timestamp, index } from 'drizzle-orm/pg-core';
+import { randomUUID } from 'node:crypto';
+import { sharedRoots } from './shared-roots';
+import { googleAccounts } from './google-accounts';
+
+export const sharedPermissions = pgTable(
+  'shared_permissions',
+  {
+    id: text('id').primaryKey().$defaultFn(() => randomUUID()),
+    sharedRootId: text('shared_root_id').notNull().references(() => sharedRoots.id, { onDelete: 'cascade' }),
+    googleAccountId: text('google_account_id').notNull().references(() => googleAccounts.id, { onDelete: 'cascade' }),
+    drivePermissionId: text('drive_permission_id').notNull(),
+    status: text('status', { enum: ['active', 'pending', 'revoked'] }).notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('shared_permissions_root_idx').on(t.sharedRootId)],
+);
+```
+
+Tambahkan kolom `role` ke `google_accounts`:
+
+```ts
+role: text('role', { enum: ['primary', 'pool'] }).notNull().default('pool'),
+```
+
+Export di `src/db/schema/index.ts`, generate & migrate:
+
+```bash
+pnpm drizzle-kit generate
+pnpm drizzle-kit migrate
+```
+
+- [x] **2. Google Drive Service — metode sharing**
+
+Tambahkan ke `GoogleDriveService`:
+
+```ts
+async createSharedRootFolder(name: string): Promise<{ id: string; name: string }> {
+  const res = await this.request('/files', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      mimeType: 'application/vnd.google-apps.folder',
+    }),
+  });
+  const data = await res.json() as { id: string; name: string };
+  return data;
 }
 
-export interface DriveFileSummary {
-  id: string;
-  name: string;
-  sizeBytes: number | null;
-  googleAccountId: string;
+async shareFolder(folderId: string, email: string, role: 'writer' | 'reader' = 'writer'): Promise<string> {
+  const res = await this.request(`/files/${folderId}/permissions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'user',
+      role,
+      emailAddress: email,
+    }),
+  });
+  const data = await res.json() as { id: string };
+  return data.id; // drive permission ID
 }
 
-export interface BalancingRecommendation {
-  fileId: string;
-  fileName: string;
-  fileSizeBytes: number;
-  sourceAccountId: string;
-  sourceAccountEmail: string;
-  targetAccountId: string;
-  targetAccountEmail: string;
-  impactDescription: string;
-}
-
-export function calculateStorageImbalance(accounts: StorageAccountSummary[]): {
-  imbalanceRatio: number;
-  isImbalanced: boolean;
-  averageUsageRatio: number;
-} {
-  const validAccounts = accounts.filter((a) => a.totalBytes != null && a.totalBytes > 0);
-  if (validAccounts.length <= 1) {
-    return { imbalanceRatio: 0, isImbalanced: false, averageUsageRatio: 0 };
-  }
-
-  const ratios = validAccounts.map((a) => a.usedBytes / a.totalBytes!);
-  const avg = ratios.reduce((sum, r) => sum + r, 0) / ratios.length;
-
-  // Standar deviasi rasio utilisasi
-  const variance = ratios.reduce((sum, r) => sum + Math.pow(r - avg, 2), 0) / ratios.length;
-  const stdDev = Math.sqrt(variance);
-
-  // Dikatakan timpang bila selisih akun terpadat dan terkosong > 40% atau stdDev > 0.25
-  const maxRatio = Math.max(...ratios);
-  const minRatio = Math.min(...ratios);
-  const isImbalanced = maxRatio - minRatio > 0.4 || stdDev > 0.25;
-
-  return {
-    imbalanceRatio: stdDev,
-    isImbalanced,
-    averageUsageRatio: avg,
-  };
-}
-
-export function getBalancingRecommendations(
-  accounts: StorageAccountSummary[],
-  candidateFiles: DriveFileSummary[],
-): BalancingRecommendation[] {
-  const { isImbalanced } = calculateStorageImbalance(accounts);
-  if (!isImbalanced) return [];
-
-  // Urutkan akun dari yang paling padat (% used tertinggi) ke paling longgar
-  const sorted = [...accounts]
-    .filter((a) => a.totalBytes != null && a.totalBytes > 0)
-    .map((a) => ({
-      ...a,
-      ratio: a.usedBytes / a.totalBytes!,
-      freeBytes: Math.max(a.totalBytes! - a.usedBytes, 0),
-    }))
-    .sort((a, b) => b.ratio - a.ratio);
-
-  const fullAccount = sorted[0];
-  const emptyAccount = sorted[sorted.length - 1];
-
-  if (!fullAccount || !emptyAccount || fullAccount.id === emptyAccount.id) return [];
-  if (fullAccount.ratio < 0.75) return []; // belum perlu rebalance bila akun terpadat masih < 75%
-
-  // Cari file berukuran signifikan (misal > 50 MB) di akun terpadat yang muat di akun terlonggar
-  const filesOnFullAccount = candidateFiles
-    .filter((f) => f.googleAccountId === fullAccount.id && f.sizeBytes != null && f.sizeBytes > 50 * 1024 * 1024)
-    .sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0));
-
-  const recommendations: BalancingRecommendation[] = [];
-
-  for (const file of filesOnFullAccount) {
-    if (file.sizeBytes! < emptyAccount.freeBytes) {
-      recommendations.push({
-        fileId: file.id,
-        fileName: file.name,
-        fileSizeBytes: file.sizeBytes!,
-        sourceAccountId: fullAccount.id,
-        sourceAccountEmail: fullAccount.email,
-        targetAccountId: emptyAccount.id,
-        targetAccountEmail: emptyAccount.email,
-        impactDescription: `Memindahkan file ini akan menurunkan pemakaian ${fullAccount.email} dan menyeimbangkan kuota ke ${emptyAccount.email}.`,
-      });
-      if (recommendations.length >= 5) break; // Maksimal 5 saran teratas
-    }
-  }
-
-  return recommendations;
+async revokePermission(folderId: string, permissionId: string): Promise<void> {
+  await this.request(`/files/${folderId}/permissions/${permissionId}`, {
+    method: 'DELETE',
+  });
 }
 ```
 
-Jalankan `pnpm test src/lib/__tests__/storage-balancing.test.ts` → PASS.
+- [x] **3. Shared drive setup service**
 
-- [ ] **3. Service streaming migration antar akun**
-
-Buat `src/lib/google-drive/migration.ts`:
+Buat `src/lib/shared-drive/setup.ts`:
 
 ```ts
-import type { GoogleAccount } from '@/db/schema';
-import { GoogleDriveService } from './service';
-import { AppError } from '@/lib/errors';
+import { db } from '@/db';
+import { googleAccounts, sharedRoots, sharedPermissions } from '@/db/schema';
+import { eq, and } from 'drizzle-orm';
+import { GoogleDriveService } from '@/lib/google-drive/service';
 import { logActivity } from '@/lib/activity';
-import { syncQuota } from '@/lib/quota';
 
-export async function migrateFileAcrossAccounts(options: {
+export async function initSharedRoot(options: {
   userId: string;
-  fileId: string;
-  sourceAccount: GoogleAccount;
-  targetAccount: GoogleAccount;
-  deleteSourceAfter?: boolean;
-}): Promise<{ targetFileId: string; targetFileName: string }> {
-  const sourceService = await GoogleDriveService.forAccount(options.sourceAccount);
-  const targetService = await GoogleDriveService.forAccount(options.targetAccount);
+  primaryAccountId: string;
+  folderName?: string;
+}): Promise<{ sharedRootId: string; driveFolderId: string }> {
+  // 1. Verifikasi akun milik user
+  const account = await db.query.googleAccounts.findFirst({
+    where: and(eq(googleAccounts.id, options.primaryAccountId), eq(googleAccounts.userId, options.userId)),
+  });
+  if (!account) throw new Error('Account not found');
 
-  // 1. Ambil metadata file sumber
-  const sourceFile = await sourceService.getFile(options.fileId);
-  if (!sourceFile) throw new AppError('NOT_FOUND', 'File sumber tidak ditemukan di Google Drive.', 404);
+  // 2. Set akun sebagai primary
+  await db.update(googleAccounts)
+    .set({ role: 'primary' })
+    .where(eq(googleAccounts.id, account.id));
 
-  // 2. Download stream dari akun sumber
-  const downloadRes = await sourceService.downloadFile(options.fileId, sourceFile.mimeType);
-  if (!downloadRes.body) throw new AppError('DRIVE_API_ERROR', 'Gagal membuka readable stream file sumber.', 500);
+  // 3. Buat folder root di Google Drive
+  const service = await GoogleDriveService.forAccount(account);
+  const folder = await service.createSharedRootFolder(options.folderName ?? 'GDrive Pool');
 
-  // 3. Pipe stream langsung ke upload akun tujuan (in-flight tanpa buffer file di disk)
-  const uploaded = await targetService.uploadFile({
-    stream: downloadRes.body,
-    contentLength: sourceFile.sizeBytes ?? 0,
-    contentType: sourceFile.mimeType,
-    filename: sourceFile.name,
+  // 4. Simpan ke DB
+  const [root] = await db.insert(sharedRoots).values({
+    userId: options.userId,
+    primaryAccountId: account.id,
+    driveFolderId: folder.id,
+    folderName: folder.name,
+  }).returning();
+
+  // 5. Share ke semua akun pool yang sudah ada
+  const poolAccounts = await db.query.googleAccounts.findMany({
+    where: and(eq(googleAccounts.userId, options.userId), eq(googleAccounts.id, account.id).not()),
   });
 
-  // 4. Jika diminta, hapus file sumber setelah upload terverifikasi
-  if (options.deleteSourceAfter) {
-    await sourceService.deleteFile(options.fileId);
+  for (const poolAccount of poolAccounts) {
+    await shareRootToAccount(root!.id, folder.id, account, poolAccount);
   }
 
-  // 5. Sync kuota kedua akun
-  await Promise.all([syncQuota(options.sourceAccount), syncQuota(options.targetAccount)]);
-
-  // 6. Catat aktivitas
   await logActivity({
     userId: options.userId,
-    googleAccountId: options.targetAccount.id,
-    action: 'file.copy',
-    fileId: uploaded.id,
-    metadata: {
-      migration: true,
-      sourceAccountId: options.sourceAccount.id,
-      sourceFileId: options.fileId,
-      deleteSourceAfter: !!options.deleteSourceAfter,
-    },
+    googleAccountId: account.id,
+    action: 'setup.init',
+    metadata: { folderId: folder.id, folderName: folder.name, poolAccountsShared: poolAccounts.length },
   });
 
-  return { targetFileId: uploaded.id, targetFileName: uploaded.name };
+  return { sharedRootId: root!.id, driveFolderId: folder.id };
+}
+
+export async function shareRootToAccount(
+  sharedRootId: string,
+  driveFolderId: string,
+  primaryAccount: GoogleAccount,
+  poolAccount: GoogleAccount,
+): Promise<void> {
+  const service = await GoogleDriveService.forAccount(primaryAccount);
+  const permId = await service.shareFolder(driveFolderId, poolAccount.email, 'writer');
+
+  await db.insert(sharedPermissions).values({
+    sharedRootId,
+    googleAccountId: poolAccount.id,
+    drivePermissionId: permId,
+    status: 'active',
+  });
+}
+
+export async function getSetupStatus(userId: string) {
+  const root = await db.query.sharedRoots.findFirst({
+    where: eq(sharedRoots.userId, userId),
+  });
+
+  if (!root) return { isSetupDone: false };
+
+  const primaryAccount = await db.query.googleAccounts.findFirst({
+    where: eq(googleAccounts.id, root.primaryAccountId),
+  });
+
+  return {
+    isSetupDone: true,
+    sharedRoot: root,
+    primaryAccount,
+  };
 }
 ```
 
-- [ ] **4. API Endpoints balancing & migration**
+> **Catatan:** Snippet di atas adalah panduan; eksekutor harus menyesuaikan import type, query DSL, dan error handling sesuai pola codebase existing (misal gunakan `AppError`, `withAuth`, dll.).
 
-Buat `src/app/api/storage/balancing/route.ts`:
-- Route `GET` dengan `withAuth`.
-- Ambil semua akun user + snapshot terbaru.
-- Ambil file-file besar dari tabel `drive_files`.
-- Hitung status ketimpangan dan daftar rekomendasi via `getBalancingRecommendations`.
-- Kembalikan `{ imbalanceRatio, isImbalanced, recommendations }`.
+- [x] **4. API Routes setup**
 
-Buat `src/app/api/files/migrate/route.ts`:
-- Route `POST` dengan `withAuth`.
-- Body: `{ fileId, sourceAccountId, targetAccountId, deleteSourceAfter?: boolean }`.
-- Verifikasi user adalah pemilik sah `sourceAccountId` dan `targetAccountId`.
-- Jalankan `migrateFileAcrossAccounts(...)`.
-- Kembalikan `{ success: true, targetFileId, targetFileName }`.
+Buat `src/app/api/setup/init/route.ts`:
+- `POST` dengan `withAuth`.
+- Body: `{ primaryAccountId: string, folderName?: string }`.
+- Panggil `initSharedRoot(...)`.
+- Kembalikan `{ sharedRootId, driveFolderId }`.
 
-- [ ] **5. Komponen UI BalancingCard & MigrateFileDialog**
+Buat `src/app/api/setup/status/route.ts`:
+- `GET` dengan `withAuth`.
+- Panggil `getSetupStatus(userId)`.
+- Kembalikan `{ isSetupDone, sharedRoot?, primaryAccount? }`.
 
-Buat `src/components/stats/storage-balancing-card.tsx`:
-- Tampilkan card "Storage Balancing & Optimasi" di `/dashboard/stats` dan tab Accounts:
-  - Skor kesehatan distribusi storage: Badge hijau "Seimbang" atau kuning "Perlu Rebalance".
-  - Daftar rekomendasi kartu saran: "File video_project.mp4 (4.2 GB) pada akun A → Pindahkan ke Akun B".
-  - Tombol "Migrate Now" pada tiap rekomendasi yang membuka `MigrateFileDialog` secara otomatis terisi.
+Buat `src/app/api/setup/share/[accountId]/route.ts`:
+- `POST` dengan `withAuth`.
+- Cari shared root milik user, cari akun pool, share folder.
 
-Buat `src/components/files/migrate-file-dialog.tsx`:
-- Pilihan target akun tujuan dari daftar akun user.
-- Checkbox "Hapus file sumber setelah migrasi selesai (Bebaskan ruang di akun asal)".
-- Info estimasi kapasitas sebelum dan sesudah transfer.
-- Progress loading indikator saat transfer streaming berlangsung.
+- [x] **5. Modifikasi OAuth callback**
 
-Tambahkan aksi "Migrate to another account" pada dropdown baris di `src/components/files/file-actions.tsx`.
+Di `src/app/api/google/callback/route.ts`:
+- Setelah berhasil simpan akun baru, cek apakah user sudah punya `sharedRoot`.
+- Jika ya, otomatis panggil `shareRootToAccount(...)` untuk share folder root ke akun baru.
+- Jika ini adalah akun pertama user, jangan share (belum ada root).
+
+- [x] **6. Setup Wizard UI**
+
+Buat `src/components/setup/setup-wizard.tsx`:
+- Multi-step form:
+  - Step 1: "Hubungkan akun Google utama" → tombol Connect (redirect OAuth).
+  - Step 2: "Buat folder root" → input nama folder, tombol Create (panggil `POST /api/setup/init`).
+  - Step 3: "Tambah akun lain (opsional)" → tombol Add More / Skip.
+  - Step 4: "Selesai! Shared Drive siap." → tombol Go to My Drive.
+- Tampilkan progress indicator (step 1/4, 2/4, dst).
+
+Buat `src/app/dashboard/setup/page.tsx`:
+- Render `SetupWizard`.
+- Jika setup sudah selesai, redirect ke `/dashboard`.
+
+Modifikasi `src/app/dashboard/layout.tsx`:
+- Setelah guard auth, cek `GET /api/setup/status`.
+- Jika `isSetupDone === false` dan halaman bukan `/dashboard/setup`, redirect ke `/dashboard/setup`.
+
+- [x] **7. Unit test**
+
+Buat `src/lib/__tests__/shared-drive-setup.test.ts`:
+- Test `getSetupStatus` returns `isSetupDone: false` when no root.
+- Test logika dasar setup flow (mocked).
+
+- [x] **8. Pipeline + commit**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+git add -A && git commit -m "feat: phase 4 schema migration and setup wizard for shared virtual drive"
+```
+
+### Verifikasi
+
+- [x] Migrasi DB berhasil (tabel `shared_roots`, `shared_permissions` dibuat, kolom `role` di `google_accounts` ada)
+- [x] `GET /api/setup/status` → `{ isSetupDone: false }` saat belum setup
+- [x] `POST /api/setup/init` → folder "GDrive Pool" terbuat di Google Drive akun utama
+- [x] Akun utama ter-set `role: 'primary'`, akun lain `role: 'pool'`
+- [x] Akun pool yang sudah ada otomatis diberi permission Editor ke folder root
+- [x] Permission tercatat di tabel `shared_permissions` dengan `drive_permission_id` dari Google
+- [x] Buka Google Drive akun pool → folder "GDrive Pool" muncul di "Shared with me"
+- [x] Setup Wizard UI tampil saat user belum setup → redirect otomatis
+- [x] Setelah setup selesai, redirect ke `/dashboard`
+- [x] Connect akun baru via OAuth → otomatis ter-share folder root
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+
+### Handoff
+
+- [x] Commit terakhir sesi 19
+- [x] Update baris **Sesi 19** di tracker: ✅, tanggal, catatan handoff
+
+---
+
+## Sesi 20 — File Browser: Folder Navigation + Breadcrumb
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 20 dari implementasi.md. Baca PRD.md §5.5 (Pembuatan Folder), §6.3 (My Drive / File Browser), §9.7 (Dashboard Components), lalu Global Constraints + Sesi 20. Kerjakan hanya Sesi 20, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Membangun file browser yang mirip Google Drive: menampilkan isi folder (bukan flat list semua file), navigasi klik folder → masuk ke subfolder, breadcrumb navigasi, tombol back ke parent, dan sidebar entry "My Drive" yang mengarah ke root folder.
+
+**Prasyarat:** Sesi 19 (Shared root sudah dibuat, folder root ID tersedia).
+
+**Consumes:** `sharedRoots`, `GoogleDriveService.listFiles`, tabel `drive_files`.
+
+**Produces:**
+- Refactor `GET /api/files`:
+  - Default behavior: list files **di dalam folder tertentu** (parameter `?folderId=`).
+  - Jika `folderId` tidak diberikan, gunakan `sharedRoot.driveFolderId` (root folder).
+  - Query Google Drive: `'<folderId>' in parents and trashed = false`.
+  - Response menyertakan `currentFolder` (id, name) dan `breadcrumb` (array folder dari root ke current).
+- API `GET /api/folders/[id]/breadcrumb`:
+  - Mengembalikan array breadcrumb dari root hingga folder saat ini.
+  - Implementasi: traverse parent chain via Google Drive API `getFile(id, fields: 'id,name,parents')`.
+- Komponen UI:
+  - `src/components/file-browser/breadcrumb.tsx`: breadcrumb navigasi klikabel (`My Drive > Documents > Reports`).
+  - `src/components/file-browser/file-browser.tsx`: wrapper utama yang mengelola state folder saat ini.
+  - Modifikasi `src/components/files/files-table.tsx`: klik baris folder → navigasi ke folder tersebut (bukan download/preview).
+- Routing:
+  - URL: `/dashboard?folderId=<id>` atau `/dashboard/files?folderId=<id>`.
+  - State folder saat ini disimpan di URL query param.
+- Sidebar:
+  - Entry "My Drive" → navigasi ke root (tanpa `folderId`).
+
+### Langkah-langkah
+
+- [ ] **1. Refactor API `GET /api/files` — folder-scoped listing**
+
+Ubah `GET /api/files` agar:
+- Menerima parameter `?folderId=<drive_folder_id>`.
+- Jika tidak ada `folderId`, ambil dari `sharedRoot.driveFolderId`.
+- Query Google Drive: `'${folderId}' in parents and trashed = false` (ditambahkan ke query builder).
+- Response menyertakan metadata folder saat ini.
+
+- [ ] **2. API breadcrumb**
+
+Buat `GET /api/folders/[id]/breadcrumb`:
+- Traverse parent chain folder menggunakan `GoogleDriveService.getFile(id)` (field `parents`).
+- Berhenti saat sampai di root folder (match `sharedRoot.driveFolderId`).
+- Return array `[{ id, name }, ...]` dari root ke current.
+
+- [ ] **3. Komponen Breadcrumb**
+
+Buat `src/components/file-browser/breadcrumb.tsx`:
+- Render breadcrumb klikabel: `📁 My Drive > Documents > Reports`.
+- Klik item → navigasi ke folder tersebut (`router.push` / update URL).
+- Item terakhir = folder aktif (tidak klikabel).
+
+- [ ] **4. Komponen File Browser**
+
+Buat `src/components/file-browser/file-browser.tsx`:
+- Membaca `folderId` dari URL search params (default: root).
+- Fetch file list dan breadcrumb.
+- Render: Breadcrumb + Toolbar + FilesTable.
+- Handle navigasi: klik folder row → update `folderId` di URL.
+
+- [ ] **5. Modifikasi FilesTable — folder klik**
+
+Di `src/components/files/files-table.tsx`:
+- Klik baris folder → navigasi ke folder tersebut (update URL `?folderId=`).
+- Klik baris file → tetap behavior lama (preview/actions).
+- Kolom "Account" bisa dihilangkan atau dijadikan opsional (karena user tidak perlu tahu file di akun mana).
+
+- [ ] **6. Sidebar update**
+
+Modifikasi `src/components/layout/sidebar.tsx`:
+- Entry "My Drive" → link ke `/dashboard` (root folder, tanpa `folderId`).
+- Hilangkan atau sesuaikan entry "Files" (karena "My Drive" = file browser).
+
+- [ ] **7. Dashboard page — redirect ke file browser**
+
+Modifikasi `src/app/dashboard/page.tsx`:
+- Halaman dashboard utama sekarang adalah file browser (bukan storage overview).
+- Atau: buat `/dashboard` sebagai file browser, pindahkan storage overview ke `/dashboard/storage`.
+
+- [ ] **8. Pipeline + commit**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+git add -A && git commit -m "feat: file browser with folder navigation and breadcrumb"
+```
+
+### Verifikasi
+
+- [ ] Navigasi ke `/dashboard` → tampil isi root folder (bukan flat list semua file)
+- [ ] Klik folder "Documents" → URL berubah ke `?folderId=<id>`, isi folder ditampilkan
+- [ ] Breadcrumb menunjukkan `My Drive > Documents`
+- [ ] Klik "My Drive" di breadcrumb → kembali ke root folder
+- [ ] Folder kosong → tampil pesan "Empty folder"
+- [ ] Search tetap berfungsi (di dalam konteks folder atau global)
+- [ ] Sidebar "My Drive" mengarah ke root folder
+- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+
+### Handoff
+
+- [ ] Commit terakhir sesi 20
+- [ ] Update baris **Sesi 20** di tracker: ✅, tanggal, catatan handoff
+
+---
+
+## Sesi 21 — Upload ke Shared Folder + Folder Creation by Primary Account
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 21 dari implementasi.md. Baca PRD.md §5.5 (Pembuatan Folder), §7 (Upload & Pemilihan Akun), lalu Global Constraints + Sesi 21. Kerjakan hanya Sesi 21, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Mengadaptasi upload agar file di-upload ke **shared folder yang sedang dibuka** (bukan ke root Drive akun tertentu), dan folder creation selalu menggunakan **akun utama** sebagai owner.
+
+**Prasyarat:** Sesi 20 (File browser dengan folderId context).
+
+**Consumes:** Upload routes, `selectAccount`, `GoogleDriveService.uploadFile`, `createFolder`, `sharedRoots`.
+
+**Produces:**
+- Refactor `POST /api/files/upload`:
+  - Wajib menerima parameter `parentFolderId` (ID folder tujuan upload).
+  - Jika tidak ada, gunakan `sharedRoot.driveFolderId` (root).
+  - Algoritma pemilihan akun tetap berlaku (pilih akun paling lapang).
+  - Upload menggunakan token akun yang dipilih, dengan metadata `parents: [parentFolderId]`.
+  - File otomatis muncul di shared folder (karena semua akun punya akses).
+- Refactor `POST /api/folders`:
+  - Folder **selalu dibuat oleh akun utama** (menggunakan token akun utama).
+  - Parameter `parentFolderId` menentukan parent folder (default: root).
+  - Folder mewarisi permission dari parent (Google Drive behavior).
+- Refactor upload chunked (`POST /api/files/upload/session`):
+  - Metadata resumable session menyertakan `parents: [parentFolderId]`.
+- UI:
+  - `UploadDialog` dan `UploadDropzone` mengirimkan `parentFolderId` saat ini ke API.
+  - `NewFolderDialog` memanggil API dengan `parentFolderId` saat ini.
+  - Hilangkan pilihan manual akun dari UploadDialog (default: automatic).
+  - Tetap sediakan advanced option untuk memilih akun secara manual.
+
+### Langkah-langkah
+
+- [ ] **1. Refactor upload API — parentFolderId**
+
+Modifikasi `POST /api/files/upload`:
+- Terima `parentFolderId` dari body/query.
+- Jika kosong, ambil root folder dari `sharedRoots`.
+- Pada pembuatan metadata Google Drive, set `parents: [parentFolderId]`.
+- Pemilihan akun (automatic) tetap sama: pilih akun paling lapang.
+
+- [ ] **2. Refactor folder creation — always primary**
+
+Modifikasi `POST /api/folders`:
+- Ambil akun utama dari `sharedRoots.primaryAccountId`.
+- Buat folder menggunakan token akun utama.
+- Set `parents: [parentFolderId]` (parent = folder saat ini).
+- Folder otomatis mewarisi sharing permission dari parent.
+
+- [ ] **3. Refactor upload chunked — parentFolderId**
+
+Modifikasi `POST /api/files/upload/session`:
+- Metadata resumable session menyertakan `parents: [parentFolderId]`.
+
+- [ ] **4. UI — context-aware upload**
+
+Modifikasi `UploadDialog`:
+- Default mode: Automatic (tidak perlu pilih akun).
+- Kirim `parentFolderId` (folder saat ini dari file browser state).
+- Advanced toggle: pilih akun manual (jika user ingin).
+
+Modifikasi `NewFolderDialog`:
+- Kirim `parentFolderId` ke `POST /api/folders`.
+
+Modifikasi `UploadDropzone` dan `FilesDropOverlay`:
+- Sertakan `parentFolderId` saat menambahkan file ke upload queue.
+
+- [ ] **5. Unit test**
+
+Test bahwa upload API menolak jika parentFolderId bukan subfolder dari shared root (opsional validation).
 
 - [ ] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
-git add -A && git commit -m "feat: storage balancing engine and cross-account file migration"
+git add -A && git commit -m "feat: upload to shared folder and folder creation by primary account"
 ```
 
 ### Verifikasi
 
-- [ ] Unit test `storage-balancing.test.ts` PASS
-- [ ] Endpoint `GET /api/storage/balancing` mengembalikan skor ketimpangan dan rekomendasi yang masuk akal
-- [ ] Kartu Storage Balancing muncul di `/dashboard/stats` dengan rekomendasi terstruktur
-- [ ] Migrasi file 20 MB dari Akun A ke Akun B via dialog:
-  - File berhasil disalin ke Akun B dengan nama dan isi yang sama persis
-  - File di Akun A terhapus jika checkbox dicentang (atau tetap ada jika tidak dicentang)
-  - Kuota snapshot kedua akun ter-refresh dan berubah proporsional
-- [ ] Transfer dilakukan streaming in-flight (RAM/disk server tidak membengkak)
-- [ ] Activity log mencatat entri migrasi dengan metadata lengkap
+- [ ] Upload file di root folder → file muncul di root shared folder
+- [ ] Navigasi ke subfolder → upload file → file muncul di subfolder tersebut
+- [ ] Upload automatic → akun paling lapang dipilih, quota akun tersebut berkurang
+- [ ] Buat folder baru → owner folder = akun utama (verifikasi di Google Drive web)
+- [ ] Buat subfolder di dalam subfolder → permission inherited, bisa diakses semua akun pool
+- [ ] Upload chunked (file besar) → file muncul di folder saat ini
+- [ ] Drag & drop file ke halaman file browser → upload ke folder saat ini
 - [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 17
-- [ ] Update baris **Sesi 17** di tracker: ✅, tanggal, catatan handoff (in-flight stream migration, balancing index)
+- [ ] Commit terakhir sesi 21
+- [ ] Update baris **Sesi 21** di tracker: ✅, tanggal, catatan handoff
 
 ---
 
-## Sesi 18 — Distributed Rate Limiter & Production Hardening (Phase 3 Acceptance)
+## Sesi 22 — Refactor File Operations untuk Shared Drive
 
-> **Prompt sesi baru:** `Kamu mengerjakan Sesi 18 dari implementasi.md. Baca PRD.md §9 (Security, Rate Limiting), §10 (Reliability), §12 Phase 3 (Hardening & Acceptance), lalu Global Constraints + Sesi 18. Kerjakan hanya Sesi 18, verifikasi lulus, commit, update tracker.`
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 22 dari implementasi.md. Baca PRD.md §5.4–§5.6 (Mekanisme Shared Drive), §6.7 (Global Search), lalu Global Constraints + Sesi 22. Kerjakan hanya Sesi 22, verifikasi lulus, commit, update tracker.`
 
-**Goal:** Production Hardening & Phase 3 Acceptance: mengganti in-memory rate limiter dengan distributed sliding window berbasis PostgreSQL (atau Redis jika tersedia via `REDIS_URL`) agar rate limit konsisten pada multiple proses/VPS, menambahkan sistem worker heartbeat & health monitoring di dashboard, audit keamanan & reliabilitas, serta verifikasi menyeluruh Acceptance Criteria Phase 3.
+**Goal:** Mengadaptasi seluruh operasi file (download, delete, rename, move, copy, bulk) agar bekerja dalam konteks shared folder, dan refactor search agar scoped ke shared root.
 
-**Prasyarat:** Sesi 14–17.
+**Prasyarat:** Sesi 21 (Upload sudah context-aware, folder creation sudah by primary).
 
-**Consumes:** Seluruh API routes, worker service, PRD §9 & §12.
+**Consumes:** Seluruh route file operations, `GoogleDriveService`, `drive_files` index cache.
 
 **Produces:**
-- Skema database:
-  - `src/db/schema/rate-limits.ts`: tabel `rate_limits` (`key`, `timestamp`) dengan index pada `(key, timestamp)`.
-  - `src/db/schema/worker-status.ts`: tabel `worker_status` (`serviceName`, `lastHeartbeat`, `meta`).
-- `src/lib/rate-limit/distributed.ts` (sliding window rate limiter PostgreSQL dengan fallback in-memory dan adapter Redis).
-- Worker heartbeat: loop worker di `src/worker/index.ts` memperbarui heartbeat berkala; endpoint `GET /api/worker/health` mengembalikan status runner.
-- UI: `WorkerStatusBadge` di header / accounts (🟢 Active / 🟡 Stale / 🔴 Stopped).
-- Acceptance run-through Phase 3 & dokumentasi `README.md`.
-- Unit test `src/lib/__tests__/distributed-rate-limit.test.ts`.
+- Refactor operasi file:
+  - **Download**: tetap sama (download dari akun pemilik file).
+  - **Delete**: menentukan akun pemilik file → delete menggunakan token akun pemilik. Perlu lookup `drive_files.googleAccountId` untuk mendapatkan akun pemilik.
+  - **Rename**: tetap sama (rename bisa dilakukan oleh siapa saja yang punya Editor access).
+  - **Move**: move file antar folder dalam shared root. Gunakan token akun utama (sebagai owner folder) atau akun pemilik file.
+  - **Copy**: copy file ke folder lain dalam shared root.
+  - **Bulk delete**: adaptasi untuk multi-account context (file berbeda bisa dimiliki akun berbeda).
+  - **Bulk move**: adaptasi untuk shared folder context.
+- Refactor search:
+  - Search scoped ke shared root: query `'<rootFolderId>' in parents` (rekursif Google Drive search).
+  - Atau: search di `drive_files` index cache yang sudah scoped ke shared root.
+- Refactor `drive_files` index cache:
+  - Index hanya file yang berada di shared root folder (bukan seluruh Drive).
+  - Worker indexer: list files di shared root → upsert ke `drive_files`.
+- Hilangkan kolom/filter "Account" dari file listing UI:
+  - User tidak perlu tahu file di akun mana (abstracted away).
+  - Info akun pemilik bisa ditampilkan di detail/tooltip (opsional).
 
 ### Langkah-langkah
 
-- [ ] **1. Skema Drizzle rate_limits dan worker_status**
+- [ ] **1. Refactor file operations — shared context**
 
-Buat `src/db/schema/rate-limits.ts`:
+Untuk setiap operasi file, pastikan:
+- Lookup akun pemilik file melalui `drive_files.googleAccountId`.
+- Gunakan token akun pemilik untuk operasi yang membutuhkan ownership (delete, download).
+- Gunakan token akun utama untuk operasi folder (move antar folder).
 
-```ts
-import { index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+- [ ] **2. Refactor search — scoped ke shared root**
 
-export const rateLimits = pgTable(
-  'rate_limits',
-  {
-    key: text('key').notNull(),
-    timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    keyTimeIdx: index('rate_limits_key_time_idx').on(table.key, table.timestamp),
-  }),
-);
-```
+Modifikasi `GET /api/files`:
+- Jika `?search=` diberikan, cari di `drive_files` index cache (yang sudah scoped ke shared root).
+- Atau cari via Google Drive API: `name contains '<term>' and '<rootFolderId>' in parents` (perlu explore apakah Google Drive API mendukung recursive search dalam folder).
+- Alternative: search di index cache `drive_files` yang sudah scoped.
 
-Buat `src/db/schema/worker-status.ts`:
+- [ ] **3. Refactor index cache**
 
-```ts
-import { jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+Modifikasi worker indexer (`src/lib/google-drive/indexer.ts`):
+- Index hanya file yang berada di shared root folder.
+- Gunakan query: `'<rootFolderId>' in parents and trashed = false` untuk setiap level.
+- Atau: list semua file yang accessible dari akun utama dengan `q` filter.
 
-export const workerStatus = pgTable('worker_status', {
-  serviceName: text('service_name').primaryKey(),
-  lastHeartbeat: timestamp('last_heartbeat', { withTimezone: true }).notNull().defaultNow(),
-  metadata: jsonb('metadata'),
-});
-```
+- [ ] **4. UI — hide account column**
 
-Export di `src/db/schema/index.ts`, lalu generate & push migrasi:
-```bash
-pnpm drizzle-kit generate
-pnpm drizzle-kit push
-```
+Modifikasi `FilesTable`:
+- Hilangkan atau sembunyikan kolom "Account" dari default view.
+- Opsional: tampilkan akun pemilik di tooltip atau detail pane.
 
-- [ ] **2. Unit test distributed rate limiter (merah)**
+Modifikasi `FilesFilters`:
+- Hilangkan filter "Account" (karena semua file berada di satu shared space).
+- Pertahankan filter lain (type, date, size).
 
-Buat `src/lib/__tests__/distributed-rate-limit.test.ts`:
+- [ ] **5. Bulk operations — multi-account aware**
 
-```ts
-import { describe, expect, it } from 'vitest';
-import { slidingWindowCheck } from '@/lib/rate-limit/sliding-window';
+Modifikasi `POST /api/files/bulk-delete` dan `POST /api/files/bulk-move`:
+- Group file berdasarkan akun pemilik.
+- Execute delete/move per akun menggunakan token masing-masing.
 
-describe('Sliding Window Rate Limiter', () => {
-  it('mengizinkan request dalam batas limit', () => {
-    const timestamps = [1000, 2000];
-    const res = slidingWindowCheck({
-      timestamps,
-      limit: 3,
-      windowMs: 5000,
-      now: 3000,
-    });
-    expect(res.ok).toBe(true);
-  });
-
-  it('menolak request yang melampaui batas kuota', () => {
-    const timestamps = [1000, 2000, 3000];
-    const res = slidingWindowCheck({
-      timestamps,
-      limit: 3,
-      windowMs: 5000,
-      now: 3500,
-    });
-    expect(res.ok).toBe(false);
-    expect(res.retryAfterMs).toBeGreaterThan(0);
-  });
-
-  it('membuang request lama di luar window', () => {
-    const timestamps = [500, 1000, 2000];
-    const res = slidingWindowCheck({
-      timestamps,
-      limit: 3,
-      windowMs: 2000,
-      now: 3000, // timestamps 500 sudah expired
-    });
-    expect(res.ok).toBe(true);
-  });
-});
-```
-
-Jalankan `pnpm test src/lib/__tests__/distributed-rate-limit.test.ts` → FAIL.
-
-- [ ] **3. Implementasi distributed rate limiter**
-
-Buat `src/lib/rate-limit/sliding-window.ts`:
-
-```ts
-export function slidingWindowCheck(params: {
-  timestamps: number[];
-  limit: number;
-  windowMs: number;
-  now: number;
-}): { ok: boolean; retryAfterMs: number } {
-  const validHits = params.timestamps.filter((t) => params.now - t < params.windowMs);
-  if (validHits.length >= params.limit) {
-    const oldestHit = validHits[0]!;
-    const retryAfterMs = params.windowMs - (params.now - oldestHit);
-    return { ok: false, retryAfterMs: Math.max(retryAfterMs, 1000) };
-  }
-  return { ok: true, retryAfterMs: 0 };
-}
-```
-
-Buat `src/lib/rate-limit/distributed.ts`:
-
-```ts
-import { and, eq, gte, lt } from 'drizzle-orm';
-import { db } from '@/db';
-import { rateLimits } from '@/db/schema';
-import { slidingWindowCheck } from './sliding-window';
-
-export async function checkDistributedRateLimit(
-  key: string,
-  limit: number,
-  windowMs: number,
-): Promise<{ ok: boolean; retryAfterMs: number }> {
-  const now = Date.now();
-  const windowStart = new Date(now - windowMs);
-
-  try {
-    // Ambil log hit dalam window saat ini
-    const hits = await db
-      .select({ timestamp: rateLimits.timestamp })
-      .from(rateLimits)
-      .where(and(eq(rateLimits.key, key), gte(rateLimits.timestamp, windowStart)));
-
-    const timestamps = hits.map((h) => h.timestamp.getTime());
-    const result = slidingWindowCheck({ timestamps, limit, windowMs, now });
-
-    if (result.ok) {
-      // Catat hit baru
-      await db.insert(rateLimits).values({ key, timestamp: new Date(now) });
-    }
-
-    // Bersihkan record lama (probabilistik 1:50)
-    if (Math.random() < 0.02) {
-      await db.delete(rateLimits).where(lt(rateLimits.timestamp, new Date(now - windowMs * 2)));
-    }
-
-    return result;
-  } catch (err) {
-    console.warn('[rate-limit] database rate limit check failed, fallback to allow', err);
-    return { ok: true, retryAfterMs: 0 };
-  }
-}
-```
-
-Perbarui seluruh pemanggilan rate limiting di API routes (`upload`, `auth`, `mutations`) agar menggunakan `checkDistributedRateLimit`.
-
-Jalankan `pnpm test src/lib/__tests__/distributed-rate-limit.test.ts` → PASS.
-
-- [ ] **4. Worker Heartbeat & API Worker Health**
-
-Di `src/worker/index.ts`:
-- Tambahkan interval heartbeat setiap 30 detik:
-  ```ts
-  async function recordHeartbeat() {
-    await db
-      .insert(workerStatus)
-      .values({
-        serviceName: 'background-worker',
-        lastHeartbeat: new Date(),
-        metadata: { uptimeSeconds: Math.floor(process.uptime()), memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024) },
-      })
-      .onConflictDoUpdate({
-        target: workerStatus.serviceName,
-        set: { lastHeartbeat: new Date(), metadata: { uptimeSeconds: Math.floor(process.uptime()) } },
-      });
-  }
-  ```
-
-Buat `src/app/api/worker/health/route.ts`:
-- Route `GET` dengan `withAuth`.
-- Cek baris `service_name = 'background-worker'`.
-- Status:
-  - `active` jika `now - lastHeartbeat <= 90 detik`.
-  - `stale` jika `90 detik < diff <= 5 menit`.
-  - `stopped` jika `> 5 menit` atau record belum ada.
-- Kembalikan `{ status, lastHeartbeat, metadata }`.
-
-- [ ] **5. Komponen UI WorkerStatusBadge**
-
-Buat `src/components/layout/worker-status-badge.tsx`:
-- Render badge indikator:
-  - 🟢 `Sync Worker Active` (variant secondary)
-  - 🟡 `Sync Worker Stale` (variant warning)
-  - 🔴 `Sync Worker Offline` (variant destructive)
-- Pasang di header atau tab Accounts dengan tooltip detail last heartbeat.
-
-- [ ] **6. Acceptance Run-Through Phase 3 & Update README**
-
-Verifikasi menyeluruh fitur Phase 3:
-1. Multi-file upload queue: antrean 5 file berjalan dengan concurrency 2, retry failed items berfungsi.
-2. Drag and drop: dropzone modal dan global dropzone di halaman files responsif.
-3. Resumable large file upload: upload chunked 50 MB+ dengan resume offset terbukti tangguh.
-4. Bulk operations: selection multi-baris tabel, bulk move dan bulk delete tereksekusi aman dengan activity log.
-5. Storage balancing & migration: deteksi ketimpangan kuota akun dan migrasi streaming file antar akun berjalan lancar.
-6. Distributed rate limiting & worker heartbeat: rate limiting konsisten antar multi-proses, status worker terpantau real-time.
-
-Perbarui `README.md` dengan status fitur Phase 3, arsitektur upload queue, konfigurasi worker, dan panduan migrasi.
-
-- [ ] **7. Pipeline + commit final**
+- [ ] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
-git add -A && git commit -m "feat: distributed rate limiter, worker heartbeat monitoring, and phase 3 acceptance"
+git add -A && git commit -m "feat: refactor file operations for shared drive context"
 ```
 
 ### Verifikasi
 
-- [ ] Seluruh unit test suite lulus (`pnpm test`)
-- [ ] Rate limiter terbukti efektif membatasi akses pada dua proses/curl terpisah secara bersamaan
-- [ ] Worker heartbeat ter-update berkala di tabel `worker_status`
-- [ ] Matikan worker sejenak → badge UI berubah menjadi "Sync Worker Offline" dalam kurun waktu 90 detik; hidupkan kembali → kembali hijau "Active"
-- [ ] Seluruh Acceptance Criteria Phase 3 terpenuhi
-- [ ] `README.md` memuat dokumentasi terkini seluruh fitur Phase 1, Phase 2, dan Phase 3
-- [ ] Seluruh pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [ ] Download file → berhasil (menggunakan token akun pemilik)
+- [ ] Delete file → file terhapus dari shared folder dan Google Drive akun pemilik
+- [ ] Rename file → nama berubah di shared folder
+- [ ] Move file dari folder A ke folder B → file pindah
+- [ ] Copy file → salinan muncul di folder tujuan
+- [ ] Search di shared root → hasil hanya file dalam shared folder
+- [ ] Bulk delete file (milik akun berbeda) → semua terhapus
+- [ ] Kolom "Account" tidak terlihat di default view file browser
+- [ ] Index cache hanya berisi file dari shared root
+- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 18
-- [ ] Update baris **Sesi 18** di tracker: ✅, tanggal, catatan (Phase 3 Selesai)
+- [ ] Commit terakhir sesi 22
+- [ ] Update baris **Sesi 22** di tracker: ✅, tanggal, catatan handoff
 
 ---
 
-## 7. Pemetaan Acceptance Criteria → Sesi
+## Sesi 23 — UI Revamp: GDrive-like Interface
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 23 dari implementasi.md. Baca PRD.md §12 (UI Design), §9.7 (Dashboard Components), lalu Global Constraints + Sesi 23. Kerjakan hanya Sesi 23, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Merombak tampilan UI agar menyerupai Google Drive: sidebar dengan storage bar, file browser sebagai halaman utama, toolbar upload/new folder, grid view (opsional), dan responsive layout yang bersih.
+
+**Prasyarat:** Sesi 22 (Semua operasi file sudah bekerja dalam shared folder context).
+
+**Consumes:** Seluruh komponen UI existing.
+
+**Produces:**
+- Sidebar revamp:
+  - Entry: My Drive, Recent, Accounts, Storage, Activity, Settings.
+  - Storage bar di bagian bawah sidebar: `"243 GB of 1.46 TB used"` + progress bar.
+  - Active state pada entry yang dipilih.
+- Header revamp:
+  - Logo/nama app di kiri.
+  - Search bar di tengah.
+  - User menu di kanan.
+  - Tanpa tombol-tombol yang sudah pindah ke toolbar file browser.
+- File browser toolbar:
+  - Tombol: `+ New` (dropdown: New Folder, Upload Files), view toggle (Grid/List), Sort dropdown.
+  - Posisi: di atas file list, di bawah breadcrumb.
+- Grid view (opsional):
+  - Thumbnail grid untuk file (mirip Google Drive grid view).
+  - Toggle antara grid dan list view.
+- Halaman Storage:
+  - Pindahkan StorageOverview, AccountList, storage charts ke `/dashboard/storage`.
+- Halaman Recent:
+  - `/dashboard/recent`: file terbaru (modified/opened), mirip Google Drive "Recent".
+- Responsive:
+  - Sidebar collapse di mobile.
+  - File browser full width di mobile.
+  - Touch-friendly actions.
+- Dark theme consistency.
+
+### Langkah-langkah
+
+- [ ] **1. Sidebar revamp**
+
+Modifikasi `src/components/layout/sidebar.tsx`:
+- Entry list: My Drive (📁), Recent (🕐), Accounts (👥), Storage (💾), Activity (📋), Settings (⚙).
+- Storage bar di bawah: fetch `/api/storage`, render `"X GB of Y TB used"` + progress bar mini.
+- Highlight active page.
+
+- [ ] **2. Header simplify**
+
+Modifikasi `src/components/layout/header.tsx`:
+- Logo + app name di kiri.
+- Search input di tengah (expand on focus).
+- User avatar + menu di kanan.
+- Hapus tombol Add Account dan Refresh dari header (pindah ke halaman Accounts).
+
+- [ ] **3. File browser toolbar**
+
+Buat `src/components/file-browser/toolbar.tsx`:
+- Tombol `+ New` (dropdown: "New Folder", "Upload Files").
+- Toggle view: Grid | List (state disimpan localStorage).
+- Sort dropdown (Name, Modified, Size).
+- Filter toggle (jika ada filter aktif).
+
+- [ ] **4. Halaman Storage**
+
+Buat/pindahkan ke `src/app/dashboard/storage/page.tsx`:
+- StorageOverview (total pool, used, free).
+- AccountList (per-akun storage cards).
+- StatsCharts (jika sudah ada dari Sesi 11).
+
+- [ ] **5. Halaman Recent**
+
+Buat `src/app/dashboard/recent/page.tsx`:
+- Fetch recent files (modified dalam 7 hari terakhir).
+- Tampilkan sebagai list/grid (reuse file browser components).
+
+- [ ] **6. Grid view (opsional)**
+
+Buat `src/components/file-browser/file-grid.tsx`:
+- Render file/folder sebagai card grid.
+- Folder: icon folder + nama.
+- File: icon berdasarkan mime type + nama + size.
+- Toggle antara `FileGrid` dan `FilesTable`.
+
+- [ ] **7. Responsive + dark theme audit**
+
+- Sidebar: Sheet overlay di mobile (< 768px).
+- File browser: full width tanpa sidebar di mobile.
+- Toolbar: stack vertikal di layar kecil.
+- Pastikan semua komponen baru dark theme compatible.
+
+- [ ] **8. Pipeline + commit**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+git add -A && git commit -m "feat: UI revamp with GDrive-like interface"
+```
+
+### Verifikasi
+
+- [ ] Tampilan mirip Google Drive: sidebar, file browser, breadcrumb, toolbar
+- [ ] Storage bar di sidebar menunjukkan total pool capacity
+- [ ] Sidebar active state benar saat navigasi antar halaman
+- [ ] Toolbar: New Folder, Upload bekerja
+- [ ] Halaman Storage (`/dashboard/storage`) menampilkan per-akun info
+- [ ] Halaman Recent (`/dashboard/recent`) menampilkan file terbaru
+- [ ] Grid view toggle berfungsi (jika diimplementasikan)
+- [ ] Responsive: sidebar collapse di mobile, layout tidak rusak
+- [ ] Dark theme konsisten di semua halaman
+- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+
+### Handoff
+
+- [ ] Commit terakhir sesi 23
+- [ ] Update baris **Sesi 23** di tracker: ✅, tanggal, catatan handoff
+
+---
+
+## Sesi 24 — Shared Drive Integrity + Storage Balancing (Adapted)
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 24 dari implementasi.md. Baca PRD.md §11.3 (Shared Root Integrity), §5.3 (Pool Accounts), lalu Global Constraints + Sesi 24. Kerjakan hanya Sesi 24, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Memastikan integritas shared root folder (auto-verify, auto-repair), menangani penambahan/penghapusan akun pool dengan benar, dan mengadaptasi storage balancing engine untuk konteks shared folder.
+
+**Prasyarat:** Sesi 23 (UI revamp selesai, semua fitur shared drive berfungsi).
+
+**Consumes:** Worker, `sharedRoots`, `sharedPermissions`, `GoogleDriveService`, storage balancing dari Sesi 17 (konsep).
+
+**Produces:**
+- Worker integrity check:
+  - Verifikasi folder root masih ada di Google Drive.
+  - Verifikasi permission semua akun pool masih aktif.
+  - Auto-reshare jika permission hilang.
+  - Alert jika folder root dihapus (error state).
+- Account lifecycle:
+  - Connect akun baru → auto-share folder root.
+  - Disconnect akun → revoke permission dari folder root, hapus dari `shared_permissions`.
+- Storage balancing (adapted):
+  - `src/lib/storage/balancing.ts`: algoritma tetap sama (deteksi ketimpangan, rekomendasi).
+  - Migration: pindahkan file dari akun penuh ke akun lapang **dalam shared folder yang sama** (file tetap di folder yang sama, tapi owner berubah).
+  - Implementasi: download dari akun A → upload dari akun B ke folder yang sama → delete file asli di akun A.
+  - API `POST /api/files/migrate` dan `GET /api/storage/balancing`.
+- UI:
+  - Storage Balancing card di halaman Storage.
+  - Migrate file dialog.
+
+### Langkah-langkah
+
+- [ ] **1. Worker integrity check**
+
+Tambahkan di `src/worker/index.ts`:
+- Interval baru: `sharedRootIntegrity` setiap 30 menit.
+- Cek folder root masih ada (getFile).
+- Cek permissions (list permissions di folder root).
+- Jika permission akun pool hilang → auto-reshare.
+- Log hasil di `activity_logs`.
+
+- [ ] **2. Account disconnect — revoke permission**
+
+Modifikasi `DELETE /api/accounts/[id]`:
+- Sebelum delete akun dari DB, revoke permission dari folder root.
+- Hapus baris dari `shared_permissions`.
+
+- [ ] **3. Storage balancing engine**
+
+Buat/adaptasi `src/lib/storage/balancing.ts` (konsep dari Sesi 17, tapi disesuaikan):
+- `calculateStorageImbalance(accounts)`: sama seperti konsep Sesi 17.
+- `getBalancingRecommendations(accounts, files)`: rekomendasi berdasarkan file di shared folder.
+
+- [ ] **4. Migration service (adapted)**
+
+Buat `src/lib/google-drive/migration.ts`:
+- Download file dari akun A → upload dari akun B ke **folder yang sama** (parentFolderId sama).
+- Delete file asli dari akun A.
+- Update `drive_files` index cache.
+
+- [ ] **5. API balancing & migration**
+
+Buat `GET /api/storage/balancing`:
+- Return skor ketimpangan dan rekomendasi.
+
+Buat `POST /api/files/migrate`:
+- Execute transfer file.
+
+- [ ] **6. UI cards & dialog**
+
+Buat `src/components/stats/storage-balancing-card.tsx`.
+Buat `src/components/files/migrate-file-dialog.tsx`.
+Tambahkan aksi "Migrate" ke file actions dropdown.
+
+- [ ] **7. Unit test**
+
+Buat `src/lib/__tests__/storage-balancing.test.ts`.
+
+- [ ] **8. Pipeline + commit**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+git add -A && git commit -m "feat: shared drive integrity checks and storage balancing"
+```
+
+### Verifikasi
+
+- [ ] Worker verifikasi shared root → log "Root folder OK" / "Permission re-shared"
+- [ ] Hapus permission akun pool secara manual di Google Drive → worker otomatis reshare
+- [ ] Disconnect akun pool → permission dicabut dari folder root
+- [ ] Connect akun baru → auto-share folder root
+- [ ] Storage balancing mendeteksi ketimpangan dengan benar
+- [ ] Migrasi file dari akun penuh ke akun lapang berhasil (file tetap di folder yang sama)
+- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+
+### Handoff
+
+- [ ] Commit terakhir sesi 24
+- [ ] Update baris **Sesi 24** di tracker: ✅, tanggal, catatan handoff
+
+---
+
+## Sesi 25 — Production Hardening + Phase 4 Acceptance
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 25 dari implementasi.md. Baca PRD.md §10 (Security), §11 (Reliability), §15 (Acceptance Criteria), lalu Global Constraints + Sesi 25. Kerjakan hanya Sesi 25, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Production hardening (distributed rate limit, worker heartbeat, audit keamanan) dan Acceptance run-through Phase 4 lengkap.
+
+**Prasyarat:** Sesi 24.
+
+**Consumes:** Seluruh API routes, worker, PRD §10 & §15.
+
+**Produces:**
+- Distributed rate limiter (dari konsep Sesi 18):
+  - `src/db/schema/rate-limits.ts`: tabel `rate_limits`.
+  - `src/db/schema/worker-status.ts`: tabel `worker_status`.
+  - `src/lib/rate-limit/distributed.ts`: sliding window PostgreSQL.
+  - Ganti in-memory rate limiter di seluruh API routes.
+- Worker heartbeat:
+  - Worker memperbarui heartbeat setiap 30 detik ke `worker_status`.
+  - `GET /api/worker/health`: return status (active/stale/stopped).
+  - UI: `WorkerStatusBadge` di header.
+- Audit keamanan:
+  - Verifikasi semua route dilindungi `withAuth`.
+  - Verifikasi semua query difilter `user_id`.
+  - Verifikasi tidak ada token di log.
+  - Verifikasi shared folder permission hanya untuk akun user sendiri.
+- Acceptance run-through Phase 4:
+  1. Login → Setup wizard → Primary account → Root folder created.
+  2. Add 2+ pool accounts → auto-shared.
+  3. My Drive menampilkan isi root folder.
+  4. Buat folder → owner = primary.
+  5. Upload file → akun otomatis, file di folder.
+  6. Navigasi folder, breadcrumb.
+  7. Download, delete, rename, move, copy.
+  8. Search di shared root.
+  9. Bulk operations.
+  10. Storage pool capacity.
+  11. Disconnect → permission revoked.
+  12. Worker: integrity check, heartbeat, sync.
+- Update `README.md` dengan arsitektur Shared Virtual Drive.
+
+### Langkah-langkah
+
+- [ ] **1. Distributed rate limiter**
+
+Implementasi sesuai konsep Sesi 18 (tabel `rate_limits`, sliding window, ganti semua API routes).
+
+- [ ] **2. Worker heartbeat**
+
+Implementasi sesuai konsep Sesi 18 (tabel `worker_status`, heartbeat loop, API health, badge UI).
+
+- [ ] **3. Audit keamanan**
+
+Checklist:
+- [ ] Semua API route dilindungi `withAuth`
+- [ ] Semua query difilter `user.id`
+- [ ] Tidak ada token di console/log
+- [ ] Shared folder permission hanya untuk akun milik user
+- [ ] Rate limit aktif pada semua mutation endpoints
+- [ ] CSRF protection pada OAuth flow
+
+- [ ] **4. Acceptance run-through Phase 4**
+
+Jalankan seluruh acceptance criteria dari PRD.md §15:
+- Verifikasi via curl dan/atau browser.
+- Catat hasil per item.
+
+- [ ] **5. Update README.md**
+
+Tulis ulang README.md:
+- Arsitektur Shared Virtual Drive.
+- Setup guide.
+- Environment variables.
+- Docker Compose.
+- Worker configuration.
+- Acceptance status.
+
+- [ ] **6. Pipeline + commit final**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+git add -A && git commit -m "feat: production hardening and phase 4 acceptance"
+```
+
+### Verifikasi
+
+- [ ] Distributed rate limiter efektif (429 pada overuse dari 2 proses berbeda)
+- [ ] Worker heartbeat aktif, badge UI berubah sesuai status
+- [ ] Audit keamanan 100% lulus
+- [ ] Seluruh 14 Acceptance Criteria Phase 4 terpenuhi
+- [ ] README.md lengkap dan akurat
+- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+
+### Handoff
+
+- [ ] Commit terakhir sesi 25
+- [ ] Update baris **Sesi 25** di tracker: ✅, tanggal, catatan (Phase 4 Selesai 🎉)
+
+---
+
+## 8. Pemetaan Acceptance Criteria → Sesi
+
+### MVP & Phase 2–3 (Sesi 1–16)
 
 | # | Acceptance (PRD §14) | Sesi | Bukti verifikasi |
 | --- | --- | --- | --- |
@@ -4327,14 +4735,31 @@ git add -A && git commit -m "feat: distributed rate limiter, worker heartbeat mo
 | — | Large file chunked resumable upload | 15 | upload file besar ter-chunk dengan resume offset (`Content-Range`) |
 | — | Multi-select file table | 16 | checkbox per baris, select-all, shift-click range selection |
 | — | Bulk delete & Bulk move | 16 | floating action bar, batch runner di server dengan activity log |
-| — | Storage balancing recommendation | 17 | algoritma rekomendasi rebalance akun over-utilized ke under-utilized |
-| — | Cross-account file migration | 17 | streaming transfer in-flight antar 2 akun Google tanpa beban disk lokal |
-| — | Distributed rate limiting | 18 | sliding window rate limiter di PostgreSQL (multi-instance/VPS) |
-| — | Worker heartbeat monitoring | 18 | status runner aktif/stale di UI dan endpoint health |
+| — | ~~Storage balancing & migration (Phase 3)~~ | 17 | 🚫 Dibatalkan, dialihkan ke Sesi 24 (Shared Drive context) |
+| — | ~~Distributed rate limiter (Phase 3)~~ | 18 | 🚫 Dibatalkan, dialihkan ke Sesi 25 |
+
+### Phase 4 — Shared Virtual Drive (Sesi 19–25)
+
+| # | Acceptance Criteria (PRD v2 §15) | Sesi | Bukti verifikasi |
+| --- | --- | --- | --- |
+| 1 | Setup Wizard: inisialisasi primary account & folder root | 19 | `POST /api/setup/init` membuat folder root di akun utama; tabel `shared_roots` terisi |
+| 2 | Auto-share folder root ke seluruh akun pool | 19 | `shared_permissions` terisi; permission Editor aktif di Google Drive akun pool |
+| 3 | Tampilan "My Drive" menampilkan isi folder root | 20 | `GET /api/files?folderId=` default ke root; tabel menampilkan file & subfolder level root |
+| 4 | Navigasi folder interaktif & breadcrumb klikabel | 20 | Klik folder masuk subfolder; breadcrumb klikable untuk navigasi naik |
+| 5 | Upload file ke folder aktif via akun terlapang | 21 | File ter-upload ke folder yang sedang dibuka; kuota uploader berkurang |
+| 6 | Pembuatan folder selalu dimiliki oleh Akun Utama | 21 | Folder baru dibuat menggunakan token akun utama; permission diwariskan |
+| 7 | Download & Delete file dengan token akun pemilik | 22 | Download/delete sukses; quota ter-refresh; baris terhapus dari shared view |
+| 8 | Move, Rename, Copy dalam struktur shared folder | 22 | Aksi berhasil merefleksikan perubahan di Google Drive dan index cache |
+| 9 | Search scoped ke shared root structure | 22 | Hasil pencarian hanya mencakup file yang berada di dalam folder root |
+| 10 | UI revamp mirip Google Drive asli | 23 | Sidebar navigasi, toolbar New/Upload, storage pool bar, responsive view |
+| 11 | Integritas folder root terjaga oleh worker | 24 | Worker auto-repair permission yang terputus; verifikasi status folder root |
+| 12 | Storage balancing & migrasi antar-akun dalam folder | 24 | File dipindahkan kepemilikannya antar-akun tanpa mengubah lokasi folder |
+| 13 | Distributed rate limiter PostgreSQL | 25 | Rate limit konsisten multi-proses; 429 saat batas terlampaui |
+| 14 | Worker heartbeat monitoring & Phase 4 Acceptance | 25 | Status worker real-time; seluruh skenario 1–14 terverifikasi end-to-end |
 
 ---
 
-## 8. Keputusan Teknis & Deviasi dari PRD
+## 9. Keputusan Teknis & Deviasi dari PRD
 
 | # | Keputusan | Alasan |
 | --- | --- | --- |
@@ -4351,10 +4776,15 @@ git add -A && git commit -m "feat: distributed rate limiter, worker heartbeat mo
 | 11 | Concurrency limit antrean upload dibatasi 2–3 paralel (Sesi 14) | Mencegah saturasi bandwidth jaringan user dan meminimalisir risiko rate limit 429 dari Google Drive API |
 | 12 | Chunked upload menggunakan protokol native Resumable Google Drive (Sesi 15) | Mengikuti PRD §6.2 tanpa file splitting buatan di server, mendukung resume byte offset saat koneksi terputus |
 | 13 | Concurrency worker pool (5 worker) untuk operasi bulk delete/move (Sesi 16) | Menyeimbangkan kecepatan eksekusi dengan keandalan Google API, menghindari flood HTTP request massal |
-| 14 | Migrasi file lintas akun menggunakan piped in-flight stream (Sesi 17) | Mengalirkan ReadableStream download ke upload session Google Drive tanpa menyimpan file sementara di disk VPS |
-| 15 | Distributed rate limit berbasis PostgreSQL sliding window (Sesi 18) | Memberikan konsistensi pembatasan request antar multiple instance Next.js tanpa mewajibkan dependensi Redis baru |
+| 14 | Migrasi file lintas akun menggunakan piped in-flight stream (Sesi 17/24) | Mengalirkan ReadableStream download ke upload session Google Drive tanpa menyimpan file sementara di disk VPS |
+| 15 | Distributed rate limit berbasis PostgreSQL sliding window (Sesi 18/25) | Memberikan konsistensi pembatasan request antar multiple instance Next.js tanpa mewajibkan dependensi Redis baru |
+| 16 | Shared Virtual Drive: Folder root tunggal di My Drive Akun Utama di-share Editor ke seluruh akun pool (Sesi 19) | Menggunakan model sharing Google Drive native agar 100 akun dapat saling melihat dan berkontribusi file ke dalam satu pohon direktori terpadu |
+| 17 | Quota file dibebankan ke uploader, bukan pemilik folder root (Sesi 21) | Perilaku native Google Drive API v3: saat akun pool mengunggah ke shared folder, kuota yang berkurang adalah milik uploader sehingga storage pool terdistribusi |
+| 18 | Pembuatan seluruh folder diatur lewat Akun Utama (Sesi 21) | Menjamin konsistensi kepemilikan struktur direktori dan memastikan izin (permissions) terwariskan (inherited) secara otomatis ke seluruh subdirektori |
+| 19 | UI File Browser menyembunyikan detail akun pemilik dari tampilan default (Sesi 20/23) | Memberikan pengalaman pengguna menyerupai Google Drive asli ("My Drive") yang mulus tanpa membingungkan user dengan akun mana yang menyimpan file |
 
 **Risiko yang diketahui:**
 - App Google OAuth berstatus Testing → refresh token kadaluarsa 7 hari (mitigasi: badge Reconnect + Sesi 3 catatan publish Production).
 - Tanpa E2E otomatis → regresi UI bergantung pada checklist verifikasi manual tiap sesi.
-- Rate limit in-memory → ditingkatkan menjadi distributed rate limit berbasis DB di Sesi 18.
+- Perubahan izin folder root eksternal via Google Drive web → mitigasi: worker integrity check berkala (Sesi 24) untuk auto-repair permissions.
+- Rate limit in-memory → ditingkatkan menjadi distributed rate limit berbasis DB di Sesi 25.

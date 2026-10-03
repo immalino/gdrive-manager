@@ -21,6 +21,9 @@ export const googleAccounts = pgTable(
     status: text('status', { enum: ['connected', 'reconnect_required', 'error'] })
       .notNull()
       .default('connected'),
+    role: text('role', { enum: ['primary', 'pool'] })
+      .notNull()
+      .default('pool'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

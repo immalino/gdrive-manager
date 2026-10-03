@@ -52,6 +52,7 @@ const testAccount = {
   refreshTokenEncrypted: 'v1.refresh',
   tokenExpiresAt: new Date(Date.now() + 3600_000),
   status: 'connected',
+  role: 'pool',
   createdAt: new Date(),
   updatedAt: new Date(),
 } satisfies GoogleAccount;

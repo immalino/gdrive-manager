@@ -407,4 +407,41 @@ export class GoogleDriveService {
     const body = (await res.json()) as { files?: Array<{ id: string; name: string }> };
     return body.files ?? [];
   }
+
+  async createSharedRootFolder(name: string): Promise<{ id: string; name: string }> {
+    const res = await this.request('/files?fields=id,name', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        mimeType: 'application/vnd.google-apps.folder',
+      }),
+    });
+    const data = (await res.json()) as { id: string; name: string };
+    return data;
+  }
+
+  async shareFolder(
+    folderId: string,
+    email: string,
+    role: 'writer' | 'reader' = 'writer',
+  ): Promise<string> {
+    const res = await this.request(`/files/${folderId}/permissions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'user',
+        role,
+        emailAddress: email,
+      }),
+    });
+    const data = (await res.json()) as { id: string };
+    return data.id;
+  }
+
+  async revokePermission(folderId: string, permissionId: string): Promise<void> {
+    await this.request(`/files/${folderId}/permissions/${permissionId}`, {
+      method: 'DELETE',
+    });
+  }
 }

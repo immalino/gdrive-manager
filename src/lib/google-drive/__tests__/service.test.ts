@@ -20,6 +20,7 @@ const account = {
   refreshTokenEncrypted: 'v1.encrypted',
   tokenExpiresAt: new Date(Date.now() + 3_600_000),
   status: 'connected',
+  role: 'pool',
   createdAt: new Date(),
   updatedAt: new Date(),
 } satisfies GoogleAccount;
@@ -388,5 +389,69 @@ describe('GoogleDriveService resumable chunked upload methods', () => {
     expect(res.file?.sizeBytes).toBe(100);
     expect(res.file?.accountId).toBe(account.id);
     vi.unstubAllGlobals();
+  });
+
+  describe('Shared Drive methods', () => {
+    it('createSharedRootFolder membuat folder di Google Drive', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ id: 'folder-root-123', name: 'GDrive Pool' }), {
+          status: 200,
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const res = await service().createSharedRootFolder('GDrive Pool');
+      expect(res.id).toBe('folder-root-123');
+      expect(res.name).toBe('GDrive Pool');
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://www.googleapis.com/drive/v3/files?fields=id,name',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'GDrive Pool',
+            mimeType: 'application/vnd.google-apps.folder',
+          }),
+        }),
+      );
+      vi.unstubAllGlobals();
+    });
+
+    it('shareFolder membagikan folder dan mengembalikan permission id', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ id: 'perm-xyz-789' }), {
+          status: 200,
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const permId = await service().shareFolder('folder-root-123', 'pool@gmail.com', 'writer');
+      expect(permId).toBe('perm-xyz-789');
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://www.googleapis.com/drive/v3/files/folder-root-123/permissions',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'user',
+            role: 'writer',
+            emailAddress: 'pool@gmail.com',
+          }),
+        }),
+      );
+      vi.unstubAllGlobals();
+    });
+
+    it('revokePermission menghapus permission dari Google Drive', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await service().revokePermission('folder-root-123', 'perm-xyz-789');
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://www.googleapis.com/drive/v3/files/folder-root-123/permissions/perm-xyz-789',
+        expect.objectContaining({
+          method: 'DELETE',
+        }),
+      );
+      vi.unstubAllGlobals();
+    });
   });
 });

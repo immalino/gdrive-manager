@@ -1,10 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/db';
-import { googleAccounts } from '@/db/schema';
+import { googleAccounts, sharedRoots } from '@/db/schema';
 import { logActivity } from '@/lib/activity';
 import { encryptSecret } from '@/lib/encryption';
 import { exchangeCode, fetchUserInfo } from '@/lib/google/oauth';
+import { shareRootToAccount } from '@/lib/shared-drive/permissions';
 
 function failRedirect(req: NextRequest, error: string): NextResponse {
   const res = NextResponse.redirect(new URL(`/dashboard/accounts?error=${error}`, req.url));
@@ -23,8 +24,11 @@ export async function GET(req: NextRequest) {
   }
 
   let userId: string;
+  let returnTo: string | undefined;
   try {
-    userId = (JSON.parse(state) as { userId: string }).userId;
+    const parsed = JSON.parse(state) as { userId: string; returnTo?: string };
+    userId = parsed.userId;
+    returnTo = parsed.returnTo;
   } catch {
     return failRedirect(req, 'invalid_state');
   }
@@ -96,7 +100,57 @@ export async function GET(req: NextRequest) {
     metadata: { email: row!.email },
   });
 
-  const res = NextResponse.redirect(new URL(`/dashboard/accounts?connected=${row!.id}`, req.url));
+  // Jika user sudah memiliki shared root, otomatis share folder root ke akun baru ini
+  try {
+    const sharedRoot = await db.query.sharedRoots.findFirst({
+      where: eq(sharedRoots.userId, userId),
+    });
+
+    if (sharedRoot && sharedRoot.primaryAccountId !== row!.id) {
+      const primaryAccount = await db.query.googleAccounts.findFirst({
+        where: and(
+          eq(googleAccounts.id, sharedRoot.primaryAccountId),
+          eq(googleAccounts.userId, userId),
+        ),
+      });
+
+      if (primaryAccount) {
+        const permission = await shareRootToAccount(
+          sharedRoot.id,
+          sharedRoot.driveFolderId,
+          primaryAccount,
+          row!,
+        );
+        await logActivity({
+          userId,
+          googleAccountId: row!.id,
+          action: 'setup.share',
+          metadata: {
+            folderId: sharedRoot.driveFolderId,
+            permissionId: permission.drivePermissionId,
+            poolEmail: row!.email,
+            autoShared: true,
+          },
+        });
+      }
+    }
+  } catch (shareErr) {
+    console.warn(
+      '[callback] auto-share root ke akun baru gagal',
+      shareErr instanceof Error ? shareErr.message : shareErr,
+    );
+  }
+
+  const targetUrl = returnTo
+    ? new URL(
+        returnTo.includes('?')
+          ? `${returnTo}&connected=${row!.id}`
+          : `${returnTo}?connected=${row!.id}`,
+        req.url,
+      )
+    : new URL(`/dashboard/accounts?connected=${row!.id}`, req.url);
+
+  const res = NextResponse.redirect(targetUrl);
   res.cookies.delete('g_oauth_state');
   return res;
 }
