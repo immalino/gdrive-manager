@@ -117,6 +117,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 6 (review 2 sumbu): diperbaiki — update `upload_jobs` tanpa `user_id` (hard) dan query storage tanpa `enabled`; dibiarkan (judgement) — duplikasi mapping `DriveFileDto` 3× di `service.ts`, pola `activeAccountId` di 2 dialog (2 baris), union `ActivityAction` berisi aksi Sesi 9 (memang diminta plan), envelope error manual di route upload (karena `errorResponse` tidak bisa set header `retry-after`).
 - Sesi 6 (live): verifikasi curl memakai `tes1@example.com` / `Sesi4Verify!` (Sesi 4/5), cookie `/tmp/opencode/cookies-s6.txt`, `next dev` dihentikan setelah verifikasi. `account.disconnect` diuji dengan baris `google_accounts` dummy (`dummy.sesi6@example.com`, token `v1.dummy`) → baris terhapus + log tertulis; baris `activity_logs` dummy dibiarkan agar bisa dicek ulang. Google Doc native untuk uji export dibuat via Drive API lalu dihapus (kedua akun tidak punya Doc native).
 - Sesi 6: `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8.
+- Sesi 6 (bugfix UI): konten dialog melebihi parent saat upload (baris progress `truncate`/nowrap → min-content ratusan px membengkakkan track grid `DialogContent` yang tak punya `min-w-0`) → ditambah `[&>*]:min-w-0` di `DialogContent` dan `AlertDialogContent`/`AlertDialogHeader` (grid item default `min-width:auto` = min-content; `min-w-0` melepas automatic minimum size sehingga track selebar kontainer dan truncate bekerja).
 ```
 
 ---
