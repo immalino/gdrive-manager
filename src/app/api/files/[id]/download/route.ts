@@ -1,3 +1,4 @@
+import { logActivity } from '@/lib/activity';
 import { AppError } from '@/lib/errors';
 import { withAuth } from '@/lib/http';
 import { getAccountForUser } from '@/lib/google/tokens';
@@ -12,5 +13,11 @@ export const GET = withAuth<Ctx>(async (user, req, ctx) => {
   const account = await getAccountForUser(user.id, accountId);
   const service = await GoogleDriveService.forAccount(account);
   const res = await service.downloadFile(id);
+  await logActivity({
+    userId: user.id,
+    googleAccountId: account.id,
+    action: 'file.download',
+    fileId: id,
+  });
   return res;
 });

@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/db';
 import { googleAccounts } from '@/db/schema';
+import { logActivity } from '@/lib/activity';
 import { encryptSecret } from '@/lib/encryption';
 import { exchangeCode, fetchUserInfo } from '@/lib/google/oauth';
 
@@ -87,6 +88,13 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.warn('[callback] sync quota gagal', error instanceof Error ? error.message : error);
   }
+
+  await logActivity({
+    userId,
+    googleAccountId: row!.id,
+    action: 'account.connect',
+    metadata: { email: row!.email },
+  });
 
   const res = NextResponse.redirect(new URL(`/dashboard/accounts?connected=${row!.id}`, req.url));
   res.cookies.delete('g_oauth_state');

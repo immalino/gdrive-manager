@@ -1,9 +1,12 @@
 import type { GoogleAccount } from '@/db/schema';
+import { AppError } from '@/lib/errors';
 import { mapGoogleError } from '@/lib/google/errors';
 import { getValidAccessToken } from '@/lib/google/tokens';
 import type { DriveFileDto, DriveQuota } from './types';
 
 const API_BASE = 'https://www.googleapis.com/drive/v3';
+// Endpoint upload resumable Google berdiri sendiri di /upload/drive/v3 (bukan di bawah API_BASE).
+const UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
 
 interface ListOptions {
   q?: string;
@@ -81,16 +84,144 @@ export class GoogleDriveService {
     return { files, nextPageToken: body.nextPageToken ?? null };
   }
 
-  async uploadFile(): Promise<never> {
-    throw new Error('uploadFile diimplementasi di Sesi 6');
+  async uploadFile(params: {
+    stream: ReadableStream<Uint8Array>;
+    contentLength: number;
+    contentType: string;
+    filename: string;
+    parentId?: string;
+  }): Promise<DriveFileDto> {
+    const metadata: Record<string, unknown> = { name: params.filename };
+    if (params.parentId) metadata.parents = [params.parentId];
+
+    const init = await fetch(
+      `${UPLOAD_BASE}/files?uploadType=resumable&fields=id,name,mimeType,size,modifiedTime,parents,webViewLink`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json; charset=UTF-8',
+          'X-Upload-Content-Length': String(params.contentLength),
+          'X-Upload-Content-Type': params.contentType || 'application/octet-stream',
+        },
+        body: JSON.stringify(metadata),
+      },
+    );
+    if (!init.ok) throw mapGoogleError(init, this.account);
+    const sessionUrl = init.headers.get('location');
+    if (!sessionUrl) throw new AppError('UPLOAD_FAILED', 'Gagal memulai sesi upload.', 502);
+
+    const put = await fetch(sessionUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Length': String(params.contentLength),
+        'Content-Type': params.contentType || 'application/octet-stream',
+      },
+      body: params.stream,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    if (!put.ok) throw mapGoogleError(put, this.account);
+    const body = (await put.json()) as {
+      id: string;
+      name: string;
+      mimeType: string;
+      size?: string;
+      modifiedTime?: string;
+      parents?: string[];
+      webViewLink?: string;
+    };
+    return {
+      id: body.id,
+      name: body.name,
+      mimeType: body.mimeType,
+      sizeBytes: body.size ? Number(body.size) : params.contentLength,
+      modifiedAt: body.modifiedTime ?? null,
+      parentId: body.parents?.[0] ?? params.parentId ?? null,
+      webViewLink: body.webViewLink ?? null,
+      accountId: this.account.id,
+      accountEmail: this.account.email,
+    };
   }
-  async downloadFile(fileId?: string): Promise<never> {
-    throw new Error(`downloadFile diimplementasi di Sesi 6 (fileId=${fileId ?? '-'})`);
+
+  async downloadFile(fileId: string): Promise<Response> {
+    const meta = await this.request(`/files/${fileId}?fields=id,name,mimeType`);
+    const file = (await meta.json()) as { id: string; name: string; mimeType: string };
+
+    if (file.mimeType.startsWith('application/vnd.google-apps.')) {
+      const exportMime = file.mimeType.includes('spreadsheet')
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : file.mimeType.includes('presentation')
+          ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+          : 'application/pdf';
+      const res = await fetch(
+        `${API_BASE}/files/${fileId}/export?mimeType=${encodeURIComponent(exportMime)}`,
+        {
+          headers: { Authorization: `Bearer ${this.accessToken}` },
+        },
+      );
+      if (!res.ok) throw mapGoogleError(res, this.account);
+      return new Response(res.body, {
+        status: 200,
+        headers: {
+          'content-type': exportMime,
+          'content-disposition': `attachment; filename="${encodeURIComponent(file.name)}"`,
+        },
+      });
+    }
+
+    const res = await fetch(`${API_BASE}/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${this.accessToken}` },
+    });
+    if (!res.ok) throw mapGoogleError(res, this.account);
+    const headers: Record<string, string> = {
+      'content-type': res.headers.get('content-type') ?? 'application/octet-stream',
+      'content-disposition': `attachment; filename="${encodeURIComponent(file.name)}"`,
+    };
+    // Hanya teruskan content-length bila Google mengirimnya dan body tidak
+    // dikompresi — nilai kosong/salah membuat respons HTTP tidak valid.
+    const contentLength = res.headers.get('content-length');
+    if (contentLength && Number(contentLength) > 0 && !res.headers.get('content-encoding')) {
+      headers['content-length'] = contentLength;
+    }
+    return new Response(res.body, { status: 200, headers });
   }
-  async deleteFile(): Promise<never> {
-    throw new Error('deleteFile diimplementasi di Sesi 6');
+
+  async deleteFile(fileId: string): Promise<void> {
+    const res = await this.request(`/files/${fileId}`, { method: 'DELETE' });
+    if (res.status !== 204 && !res.ok) throw mapGoogleError(res, this.account);
   }
-  async createFolder(): Promise<never> {
-    throw new Error('createFolder diimplementasi di Sesi 6');
+
+  async createFolder(name: string, parentId?: string): Promise<DriveFileDto> {
+    const res = await this.request(
+      '/files?fields=id,name,mimeType,parents,webViewLink,modifiedTime',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          mimeType: 'application/vnd.google-apps.folder',
+          ...(parentId ? { parents: [parentId] } : {}),
+        }),
+      },
+    );
+    const body = (await res.json()) as {
+      id: string;
+      name: string;
+      mimeType: string;
+      parents?: string[];
+      webViewLink?: string;
+      modifiedTime?: string;
+    };
+    return {
+      id: body.id,
+      name: body.name,
+      mimeType: body.mimeType,
+      sizeBytes: null,
+      modifiedAt: body.modifiedTime ?? null,
+      parentId: body.parents?.[0] ?? parentId ?? null,
+      webViewLink: body.webViewLink ?? null,
+      accountId: this.account.id,
+      accountEmail: this.account.email,
+    };
   }
 }

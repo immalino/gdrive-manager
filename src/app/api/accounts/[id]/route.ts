@@ -1,10 +1,10 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { googleAccounts } from '@/db/schema';
+import { logActivity } from '@/lib/activity';
 import { decryptSecret } from '@/lib/encryption';
 import { AppError } from '@/lib/errors';
 import { ok, withAuth } from '@/lib/http';
-// logActivity baru ada di Sesi 6 — aktifkan kembali bersama pembuatan src/lib/activity.ts.
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -26,6 +26,10 @@ export const DELETE = withAuth<Ctx>(async (user, _req, ctx) => {
   await db
     .delete(googleAccounts)
     .where(and(eq(googleAccounts.id, id), eq(googleAccounts.userId, user.id)));
-  // await logActivity({ userId: user.id, action: 'account.disconnect', metadata: { email: row.email } });
+  await logActivity({
+    userId: user.id,
+    action: 'account.disconnect',
+    metadata: { email: row.email },
+  });
   return ok({ deleted: true });
 });

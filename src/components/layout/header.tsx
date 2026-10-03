@@ -5,6 +5,7 @@ import { MobileNav } from '@/components/layout/sidebar';
 import { UserMenu } from '@/components/layout/user-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { UploadButton } from '@/components/upload/upload-dialog';
 
 interface HeaderProps {
   user: { name: string; email: string };
@@ -19,6 +20,7 @@ export function Header({ user }: HeaderProps) {
         <Input disabled placeholder="Search files..." className="pl-8" aria-label="Search files" />
       </div>
       <div className="ml-auto flex items-center gap-2">
+        <UploadButton />
         <Button variant="outline" disabled title="Fitur menyusul">
           <RefreshCw />
           Refresh

@@ -30,6 +30,7 @@ import type { DriveFileDto } from '@/lib/google-drive/types';
 import type { FilesResponse, StorageAccountItem, StorageResponse } from '@/types';
 import { FileActions } from './file-actions';
 import { FilesFilters } from './files-filters';
+import { NewFolderButton } from './new-folder-dialog';
 
 const EMPTY_FILES: DriveFileDto[] = [];
 const EMPTY_ACCOUNTS: StorageAccountItem[] = [];
@@ -147,19 +148,24 @@ export function FilesTable({ initial }: { initial: FilesInitialFilters }) {
 
   return (
     <div className="space-y-4">
-      <FilesFilters
-        searchInput={searchInput}
-        onSearchChange={setSearchInput}
-        accountId={accountId}
-        onAccountChange={setAccountId}
-        kind={kind}
-        onKindChange={setKind}
-        sort={sort}
-        onSortChange={setSort}
-        dir={dir}
-        onDirChange={setDir}
-        accounts={storage?.accounts ?? EMPTY_ACCOUNTS}
-      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <FilesFilters
+            searchInput={searchInput}
+            onSearchChange={setSearchInput}
+            accountId={accountId}
+            onAccountChange={setAccountId}
+            kind={kind}
+            onKindChange={setKind}
+            sort={sort}
+            onSortChange={setSort}
+            dir={dir}
+            onDirChange={setDir}
+            accounts={storage?.accounts ?? EMPTY_ACCOUNTS}
+          />
+        </div>
+        <NewFolderButton />
+      </div>
 
       {failedAccounts.length > 0 && (
         <Alert variant="destructive">
