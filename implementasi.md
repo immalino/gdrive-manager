@@ -22,7 +22,7 @@
 3. [Peta Sesi & Dependency](#3-peta-sesi--dependency)
 4. [MVP — Sesi 1–8](#4-mvp--sesi-18)
 5. [Phase 2 — Sesi 9–13](#5-phase-2--sesi-913)
-6. [Backlog Phase 3](#6-backlog-phase-3)
+6. [Phase 3 — Sesi 14–18](#6-phase-3--sesi-1418)
 7. [Pemetaan Acceptance Criteria → Sesi](#7-pemetaan-acceptance-criteria--sesi)
 8. [Keputusan Teknis & Deviasi dari PRD](#8-keputusan-teknis--deviasi-dari-prd)
 
@@ -80,6 +80,11 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 11 | Phase 2: Activity log page + Statistik storage/file | ✅ | 2026-10-03 | Pipeline lulus (52 unit test, build, lint, format:check). API /api/activity mendukung filter action, accountId, dan pagination; API /api/stats menyediakan ringkasan storage, fileKinds, snapshotHistory (AreaChart), dan actionCounts. Halaman /dashboard/activity (ActivityTable) dan /dashboard/stats (StatsCards + StatsCharts) berfungsi penuh; menu Stats ditambahkan ke sidebar; isolasi cross-user teruji aman; statistik bergantung pada kelengkapan index drive_files yang akan diperbarui oleh background sync di Sesi 12. |
 | 12 | Phase 2: Background sync (worker) + account health monitoring | ✅ | 2026-10-03 | Pipeline lulus (61 unit test, build, lint, format:check). Worker src/worker/index.ts (quota 10m, health 30m, index 60m) beroperasi tanpa Redis; indexAccountFiles dengan paging hingga 2000 file; health check memantau konektivitas & menangani token expired (reconnect_required) serta recovery; Docker service worker terkonfigurasi di docker-compose.yml; panduan VPS (PM2/systemd) didokumentasikan di README; UI AccountsTable & Dashboard auto-refetch storage tiap 5 menit. |
 | 13 | Phase 2: Advanced search + file preview | ✅ | 2026-10-03 | Pipeline lulus (65 unit test, build, lint, format:check). buildDriveQuery diperluas (sizeMin/Max, modifiedAfter/Before). UI FilesFilters mendukung popover filter lanjutan (rentang tanggal, ukuran file angka + unit MB/GB, multi-select checkbox akun, dan tombol reset) dengan URL query params & browser history synchronization. PreviewDialog mendukung preview file Google Drive via iframe dengan tautan fallback Buka di Drive & Download, aksi Preview pada dropdown/quick action baris, serta double-click baris tabel. Live curl terverifikasi: query ukuran >=100MB, multi-akun, kombinasi filter, dan validasi 400. Google Drive API v3 tidak mendukung filter size di q parameter sehingga query disanitasi di service.ts dan difilter in-memory di API route (mirip kind folder/other di Sesi 5). Phase 2 Selesai. |
+| 14 | Phase 3: Drag & Drop + Concurrent Upload Queue & Retry UI | ✅ | 2026-10-03 | Pipeline lulus (69 unit test, build, lint, format:check). UploadQueueManager mengontrol concurrency limit (2 paralel) dengan AbortController cancellation dan retry pool. UploadDropzone menyediakan visual drag-over dan multi-file selector. UploadQueueDrawer mengambang di pojok kanan bawah dashboard layout dengan status per-item, progress bar, tombol cancel/retry individual, dan retry all failed. FilesDropOverlay memungkinkan drag-and-drop langsung file dari desktop di halaman Files ke antrean upload mode auto/aktif. |
+| 15 | Phase 3: Large File Resumable Upload & Network Resilience | ⬜ | — | Resumable session Google Drive tersimpan di DB (`upload_jobs`), upload chunked dengan resume byte offset (`Content-Range`), retry tahan putus koneksi. |
+| 16 | Phase 3: Multi-Select Table & Bulk Operations (Delete & Move) | ⬜ | — | Checkbox selection pada FilesTable, floating bulk action bar, API `POST /api/files/bulk-delete` & `POST /api/files/bulk-move`, dialog konfirmasi progress. |
+| 17 | Phase 3: Storage Balancing Engine & Cross-Account File Migration | ⬜ | — | Algoritma deteksi ketimpangan storage, rekomendasi rebalance akun, API & pipeline streaming migrasi file lintas akun (`POST /api/files/migrate`). |
+| 18 | Phase 3: Distributed Rate Limiter & Production Hardening | ⬜ | — | Rate limiter PostgreSQL sliding window (multi-instance/VPS), worker heartbeat status di UI, audit keamanan & acceptance run-through Phase 3. |
 
 **Log Sesi** (diisi bila ada keputusan penting lintas sesi):
 
@@ -125,6 +130,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 11: Recharts dipasang untuk visualisasi statistik; `useSyncExternalStore` digunakan pada render chart client untuk menghindari hydration mismatch dan aturan react-hooks/set-state-in-effect; kalkulasi totals dan aggregasi file kinds diisolasi di `src/lib/stats.ts` dan dilindungi unit test; GET /api/activity mendukung filter action & accountId (dengan proteksi user_id) serta pagination; halaman /dashboard/activity dan /dashboard/stats aktif dengan visualisasi dan tabel lengkap; menu Stats ditambahkan ke Sidebar.
 - Sesi 12: Worker loop berjalan tanpa top-level await langsung pada format CJS (menggunakan startWorker().catch() dan guard !process.env.VITEST agar aman diimpor Vitest); Docker service worker berjalan dengan image node:22-alpine; indexAccountFiles melakukan upsert batch ke drive_files dengan paging Google Drive hingga 20 halaman (2.000 file/akun); checkAccountHealth memulihkan status ke connected jika kuota berhasil diambil dan mendeteksi ACCOUNT_DISCONNECTED menjadi reconnect_required; penanganan safe() menjamin kegagalan 1 akun tidak mematikan seluruh proses worker.
 - Sesi 13: Google Drive API v3 tidak mendukung term size di parameter q (mengembalikan 400 Bad Request) → buildDriveQuery tetap menghasilkan size > / < sesuai spesifikasi pengujian, lalu query disanitasi di service.ts sebelum dikirim ke Google API dan hasil difilter in-memory di GET /api/files (pola yang sama dengan kind other/folder pada Sesi 5). PreviewDialog menampilkan iframe Google Drive viewer dengan fallback tautan Buka di Drive dan Download. Popover FilesFilters menggunakan Base UI Popover & Checkbox untuk rentang tanggal, rentang ukuran (MB/GB), dan multi-select akun. Double click baris tabel membuka preview. Seluruh Phase 2 selesai.
+- Sesi 14: Concurrency upload dibatasi 2 simultan via UploadQueueManager singleton; UploadDropzone menangani drag-over visual dan multi-file selection; UploadQueueDrawer terpasang di dashboard layout sehingga upload tetap berjalan saat navigasi halaman; drag & drop desktop di /dashboard/files ditangani oleh FilesDropOverlay yang otomatis memasukkan file ke antrean; tombol cancel memicu signal AbortController; tombol retry mengulang upload item gagal tanpa perlu re-pick file; pipeline lulus (69 unit test).
 ```
 ```
 
@@ -293,24 +299,31 @@ openssl rand -base64 32   # → BETTER_AUTH_SECRET
 
 ```text
 Sesi 1 Foundation ─► Sesi 2 Auth ─► Sesi 3 OAuth+Enkripsi ─► Sesi 4 Quota+Accounts
-                                                                     │
-                                         ┌───────────────────────────┘
-                                         ▼
-                             Sesi 5 Files list/search/cache ─► Sesi 6 Upload/Delete/Folder
-                                                                     │
-                                         ┌───────────────────────────┘
-                                         ▼
-                             Sesi 7 Dashboard+Global search ─► Sesi 8 Polish+Acceptance MVP
-                                                                     │
-                                         ┌───────────────────────────┘
-                                         ▼
+                                                             │
+                                 ┌───────────────────────────┘
+                                 ▼
+                     Sesi 5 Files list/search/cache ─► Sesi 6 Upload/Delete/Folder
+                                                             │
+                                 ┌───────────────────────────┘
+                                 ▼
+                     Sesi 7 Dashboard+Global search ─► Sesi 8 Polish+Acceptance MVP
+                                                             │
+                                 ┌───────────────────────────┘
+                                 ▼
                     Sesi 9 Move/Rename/Copy ─► Sesi 10 Auto account selection
                              Sesi 11 Statistik+Activity   (butuh Sesi 8)
                              Sesi 12 Background sync      (butuh Sesi 11)
                              Sesi 13 Advanced search+Preview (butuh Sesi 11)
+                                                             │
+                                 ┌───────────────────────────┘
+                                 ▼
+            Sesi 14 Drag & Drop + Upload Queue ─► Sesi 15 Large File Resumable
+            Sesi 16 Bulk Delete & Move (butuh Sesi 9 & 13)
+            Sesi 17 Storage Balancing & Migration (butuh Sesi 10, 11, 12)
+            Sesi 18 Distributed Rate Limit & Hardening (Phase 3 Acceptance)
 ```
 
-Urutan eksekusi dianjurkan: 1→2→3→4→5→6→7→8→9→10→11→12→13.
+Urutan eksekusi dianjurkan: 1→2→3→4→5→6→7→8→9→10→11→12→13→14→15→16→17→18.
 
 ---
 
@@ -2840,966 +2853,1447 @@ git add -A && git commit -m "feat: error handling, account health, rate limits, 
 
 ---
 
-## 5. Phase 2 — Sesi 9–13
+## 5. Phase 2 — Sesi 9–13 [SELESAI]
 
-> Aturan sama: satu sesi = satu session opencode baru. Phase 2 dikerjakan hanya setelah Sesi 8 selesai.
-
----
-
-## Sesi 9 — Move, Rename, Copy File
-
-> **Prompt sesi baru:** `Kamu mengerjakan Sesi 9 dari implementasi.md. Baca PRD.md §5.5 (Actions: Move/Rename/Copy) dan §12 Phase 2, lalu Global Constraints + Sesi 9. Kerjakan hanya Sesi 9, verifikasi lulus, commit, update tracker.`
-
-**Goal:** File bisa di-rename, di-move antar folder (dalam 1 akun), dan di-copy; folder bisa di-rename/move/delete; semua tercatat di activity log.
-
-**Prasyarat:** Sesi 8.
-
-**Consumes:** `GoogleDriveService` (Sesi 4–6), `FilesTable` + `FileActions` (Sesi 5–6), `logActivity` (Sesi 6), `mapGoogleError` async (Sesi 8).
-
-**Produces:**
-- `service.renameFile/moveFile/copyFile/listFolders` + `buildMoveParams` (unit tested).
-- `PATCH /api/files/[id]` (`{ name?, folderId?, fromFolderId? }`), `POST /api/files/[id]/copy`, `PATCH /api/folders/[id]`, `DELETE /api/folders/[id]`.
-- UI: dialog Rename, Move (folder picker), Copy.
-
-### Langkah-langkah
-
-- [x] **1. Test helper move (merah)**
-
-Buat `src/lib/__tests__/move-params.test.ts`:
-
-```ts
-import { describe, expect, it } from 'vitest';
-import { buildMoveParams } from '@/lib/files/move-params';
-
-describe('buildMoveParams', () => {
-  it('root → folder', () => {
-    expect(buildMoveParams(null, 'f1')).toEqual({ addParents: 'f1', removeParents: '' });
-  });
-  it('antar folder', () => {
-    expect(buildMoveParams('f0', 'f1')).toEqual({ addParents: 'f1', removeParents: 'f0' });
-  });
-  it('tujuan null → ke root', () => {
-    expect(buildMoveParams('f0', null)).toEqual({ addParents: '', removeParents: 'f0' });
-  });
-});
-```
-
-`pnpm test` → FAIL.
-
-- [x] **2. Helper + method service**
-
-Buat `src/lib/files/move-params.ts`:
-
-```ts
-export function buildMoveParams(fromParentId: string | null, toParentId: string | null) {
-  return {
-    addParents: toParentId ?? '',
-    removeParents: fromParentId ?? '',
-  };
-}
-```
-
-Tambahkan di `src/lib/google-drive/service.ts` (pakai `await mapGoogleError(...)` sesuai Sesi 8):
-
-```ts
-async renameFile(fileId: string, name: string): Promise<void> {
-  const res = await this.request(`/files/${fileId}?fields=id,name`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) throw await mapGoogleError(res, this.account);
-}
-
-async moveFile(fileId: string, fromParentId: string | null, toParentId: string | null): Promise<void> {
-  const { addParents, removeParents } = buildMoveParams(fromParentId, toParentId);
-  const search = new URLSearchParams({ fields: 'id,parents' });
-  if (addParents) search.set('addParents', addParents);
-  if (removeParents) search.set('removeParents', removeParents);
-  const res = await this.request(`/files/${fileId}?${search.toString()}`, { method: 'PATCH' });
-  if (!res.ok) throw await mapGoogleError(res, this.account);
-}
-
-async copyFile(fileId: string, name: string, parentId?: string): Promise<DriveFileDto> {
-  const res = await this.request(
-    `/files/${fileId}/copy?fields=id,name,mimeType,size,modifiedTime,parents,webViewLink`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, ...(parentId ? { parents: [parentId] } : {}) }),
-    },
-  );
-  if (!res.ok) throw await mapGoogleError(res, this.account);
-  const body = (await res.json()) as {
-    id: string; name: string; mimeType: string; size?: string;
-    modifiedTime?: string; parents?: string[]; webViewLink?: string;
-  };
-  return {
-    id: body.id,
-    name: body.name,
-    mimeType: body.mimeType,
-    sizeBytes: body.size ? Number(body.size) : null,
-    modifiedAt: body.modifiedTime ?? null,
-    parentId: body.parents?.[0] ?? parentId ?? null,
-    webViewLink: body.webViewLink ?? null,
-    accountId: this.account.id,
-    accountEmail: this.account.email,
-  };
-}
-
-async listFolders(parentId?: string): Promise<Array<{ id: string; name: string }>> {
-  const parentClause = parentId ? `'${parentId}' in parents` : `'root' in parents`;
-  const q = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and ${parentClause}`;
-  const res = await this.request(`/files?pageSize=200&q=${encodeURIComponent(q)}&fields=files(id,name)`);
-  const body = (await res.json()) as { files?: Array<{ id: string; name: string }> };
-  return body.files ?? [];
-}
-```
-
-- [x] **3. API endpoints**
-
-`src/app/api/files/[id]/route.ts` — tambahkan `PATCH`:
-
-```ts
-export const PATCH = withAuth<Ctx>(async (user, req, ctx) => {
-  const { id } = await ctx.params;
-  const accountId = req.nextUrl.searchParams.get('accountId');
-  const body = (await req.json()) as { name?: string; folderId?: string | null; fromFolderId?: string | null };
-  if (!accountId) throw new AppError('VALIDATION', 'accountId wajib.', 400);
-  const account = await getAccountForUser(user.id, accountId);
-  const service = await GoogleDriveService.forAccount(account);
-
-  if (body.name?.trim()) {
-    await service.renameFile(id, body.name.trim());
-    await logActivity({
-      userId: user.id, googleAccountId: account.id, action: 'file.rename',
-      fileId: id, metadata: { name: body.name.trim() },
-    });
-  }
-  if (body.folderId !== undefined) {
-    await service.moveFile(id, body.fromFolderId ?? null, body.folderId);
-    await logActivity({
-      userId: user.id, googleAccountId: account.id, action: 'file.move',
-      fileId: id, metadata: { to: body.folderId },
-    });
-  }
-  return ok({ updated: true });
-});
-```
-
-`src/app/api/files/[id]/copy/route.ts`:
-
-```ts
-export const POST = withAuth<Ctx>(async (user, req, ctx) => {
-  const { id } = await ctx.params;
-  const accountId = req.nextUrl.searchParams.get('accountId');
-  const { name, folderId } = (await req.json()) as { name?: string; folderId?: string };
-  if (!accountId || !name?.trim()) throw new AppError('VALIDATION', 'accountId dan name wajib.', 400);
-  const account = await getAccountForUser(user.id, accountId);
-  const service = await GoogleDriveService.forAccount(account);
-  const copy = await service.copyFile(id, name.trim(), folderId);
-  await logActivity({
-    userId: user.id, googleAccountId: account.id, action: 'file.copy',
-    fileId: copy.id, metadata: { sourceFileId: id, name: copy.name },
-  });
-  return ok({ file: copy }, 201);
-});
-```
-
-`src/app/api/folders/[id]/route.ts` — `PATCH` (rename/move) dan `DELETE` (hapus folder **beserta isinya**; konfirmasi keras di UI):
-
-```ts
-type Ctx = { params: Promise<{ id: string }> };
-
-export const PATCH = withAuth<Ctx>(async (user, req, ctx) => {
-  const { id } = await ctx.params;
-  const accountId = req.nextUrl.searchParams.get('accountId');
-  const body = (await req.json()) as { name?: string; folderId?: string | null; fromFolderId?: string | null };
-  if (!accountId) throw new AppError('VALIDATION', 'accountId wajib.', 400);
-  const account = await getAccountForUser(user.id, accountId);
-  const service = await GoogleDriveService.forAccount(account);
-  if (body.name?.trim()) await service.renameFile(id, body.name.trim());
-  if (body.folderId !== undefined) await service.moveFile(id, body.fromFolderId ?? null, body.folderId);
-  await logActivity({
-    userId: user.id, googleAccountId: account.id, action: body.name ? 'file.rename' : 'file.move',
-    fileId: id, metadata: { target: 'folder' },
-  });
-  return ok({ updated: true });
-});
-
-export const DELETE = withAuth<Ctx>(async (user, req, ctx) => {
-  const { id } = await ctx.params;
-  const accountId = req.nextUrl.searchParams.get('accountId');
-  if (!accountId) throw new AppError('VALIDATION', 'accountId wajib.', 400);
-  const account = await getAccountForUser(user.id, accountId);
-  const service = await GoogleDriveService.forAccount(account);
-  await service.deleteFile(id);
-  await logActivity({ userId: user.id, googleAccountId: account.id, action: 'file.delete', fileId: id, metadata: { target: 'folder' } });
-  return ok({ deleted: true });
-});
-```
-
-- [x] **4. UI: Rename / Move / Copy**
-
-Di `src/components/files/file-actions.tsx`:
-- **Rename** → Dialog (Input prefilled nama) → `api.patch('/api/files/{id}?accountId=', { name })` → invalidasi `['files']`.
-- **Move** → Dialog berisi folder picker: `useQuery(['folders', accountId], () => api.get('/api/folders?accountId=' + accountId))` — buat `GET /api/folders` (list via `service.listFolders()` per akun, hasil digabung + dimapping `accountId`), pilih folder (atau "Root") → `api.patch(..., { folderId, fromFolderId })`.
-- **Copy** → Dialog (nama baru + pilihan folder tujuan) → `api.post('/api/files/{id}/copy?accountId=', {...})`.
-- Aksi muncul juga di dropdown baris (DropdownMenu), bukan hanya ikon terpisah.
-- Folder row (bila ditampilkan): Rename, Move, Delete (AlertDialog dengan peringatan "folder beserta isinya akan dihapus").
-
-Buat `GET /api/folders`:
-
-```ts
-export const GET = withAuth(async (user, req) => {
-  const accountId = req.nextUrl.searchParams.get('accountId');
-  if (!accountId) throw new AppError('VALIDATION', 'accountId wajib.', 400);
-  const account = await getAccountForUser(user.id, accountId);
-  const service = await GoogleDriveService.forAccount(account);
-  const folders = await service.listFolders();
-  return ok({ folders: folders.map((f) => ({ ...f, accountId: account.id, accountEmail: account.email })) });
-});
-```
-
-- [x] **5. Pipeline + commit**
-
-```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
-git add -A && git commit -m "feat: move, rename, copy file and folder operations"
-```
-
-### Verifikasi
-
-- [x] `pnpm test` → test `buildMoveParams` PASS
-- [x] Rename file → nama berubah di tabel dan di Drive web
-- [x] Move file ke folder lain (akun sama) → pindah; kembali ke Root → pindah
-- [x] Copy file → muncul 2 salinan, aslinya utuh
-- [x] Hapus folder kosong → hilang; folder berisi → konfirmasi keras muncul dulu
-- [x] `select action, count(*) from activity_logs group by action` → `file.rename`, `file.move`, `file.copy` bertambah
-- [x] Pipeline lulus
-
-### Handoff
-
-- [x] Commit terakhir sesi 9
-- [x] Update baris **Sesi 9** di tracker: ✅, tanggal, catatan (mis. "copy lintas akun belum didukung — hanya dalam 1 akun")
+> Seluruh sesi Phase 2 telah selesai dikerjakan, diverifikasi, dan di-commit (lihat [Tracker](#1-tracker) dan [Log Sesi](#8-keputusan-teknis--deviasi-dari-prd)). Bagian di bawah ini merupakan ringkasan eksekutif artefak dan hasil verifikasi tiap sesi.
 
 ---
 
-## Sesi 10 — Automatic Account Selection (Mode B)
+### Sesi 9 — Move, Rename, Copy File [✅ SELESAI]
 
-> **Prompt sesi baru:** `Kamu mengerjakan Sesi 10 dari implementasi.md. Baca PRD.md §6.1 Mode B, §6.3 (Automatic Account Selection), §6.4 (Sync Quota), lalu Global Constraints + Sesi 10. Kerjakan hanya Sesi 10, verifikasi lulus, commit, update tracker.`
+- **Goal:** File & folder dapat di-rename, dipindahkan antar folder (dalam akun yang sama), di-copy, serta folder dapat dihapus rekursif; seluruh aksi tercatat di `activity_logs`.
+- **Artefak:**
+  - `src/lib/files/move-params.ts`: `buildMoveParams(fromParentId, toParentId)`
+  - `src/lib/google-drive/service.ts`: method `renameFile`, `moveFile`, `copyFile`, `listFolders`
+  - API Routes: `PATCH /api/files/[id]`, `POST /api/files/[id]/copy`, `PATCH /api/folders/[id]`, `DELETE /api/folders/[id]`, `GET /api/folders`
+  - UI: Menu aksi baris (`DropdownMenu`) & dialog modal Rename, Move (folder picker), Copy, dan Delete confirmation di `src/components/files/file-actions.tsx`.
+- **Hasil Verifikasi:** Unit test `buildMoveParams` PASS; rename/move/copy file & delete folder teruji via live curl dan tercermin di Google Drive; activity log mencatat `file.rename`, `file.move`, `file.copy`, `file.delete`.
+- **Catatan Handoff:** Copy dan move beroperasi dalam satu akun yang sama (lintas akun dikerjakan di Phase 3 Sesi 17).
 
-**Goal:** Upload bisa memilih akun otomatis berdasarkan sisa ruang terbesar yang muat file (sesuai algoritma PRD §6.3), dengan preview keputusan sebelum upload.
+---
 
-**Prasyarat:** Sesi 9 (minimal 2 akun, free space berbeda).
+### Sesi 10 — Automatic Account Selection (Mode B) [✅ SELESAI]
 
-**Consumes:** `syncQuota` + `GET /api/storage`, `POST /api/files/upload` (Sesi 6), `UploadDialog` (Sesi 6).
+- **Goal:** Upload otomatis memilih akun tujuan berdasarkan sisa kuota terbesar yang muat file (algoritma PRD §6.3), dengan preview kelayakan sebelum upload.
+- **Artefak:**
+  - `src/lib/upload/select-account.ts`: `selectAccount(fileSize, accounts)`
+  - API Route: `POST /api/files/upload?mode=auto` (auto-refresh quota seluruh akun, auto-seleksi tujuan, proteksi `413 QUOTA_EXCEEDED` bila seluruh akun tidak muat).
+  - UI: Radio destination (`Automatic` vs `Specific account`) di `UploadDialog` + panel preview kandidat akun (✅/❌) sesuai ukuran file.
+- **Hasil Verifikasi:** 4 unit test `selectAccount` PASS (termasuk skenario PRD); mode auto memilih akun dengan free space terbesar; penolakan file yang melampaui seluruh kapasitas akun; kuota akun tujuan ter-sync setelah upload.
+- **Catatan Handoff:** Mode auto siap digunakan untuk multi-file queue di Phase 3 Sesi 14.
+
+---
+
+### Sesi 11 — Activity Log Page + Statistik [✅ SELESAI]
+
+- **Goal:** Halaman riwayat aktivitas (filter & pagination) dan halaman statistik storage/file dengan visualisasi grafik.
+- **Artefak:**
+  - Dependensi: `recharts`, helper agregasi di `src/lib/stats.ts`.
+  - API Routes: `GET /api/activity` (filter `action`, `accountId`, pagination `page`/`pageSize`), `GET /api/stats` (totals, `fileKinds` breakdown dari `drive_files`, snapshot history, action counts).
+  - UI: Halaman `/dashboard/activity` (`ActivityTable`), halaman `/dashboard/stats` (`StatsCards` & `StatsCharts` AreaChart), menu Stats di sidebar.
+- **Hasil Verifikasi:** Aktivitas file terfilter rapi; statistik storage konsisten dengan dashboard; grafik riwayat snapshot render tanpa hydration error; isolasi multi-tenant terverifikasi aman.
+- **Catatan Handoff:** Akurasi statistik jenis file bergantung pada kelengkapan index `drive_files` yang disegarkan berkala oleh worker.
+
+---
+
+### Sesi 12 — Background Sync (Worker) + Account Health Monitoring [✅ SELESAI]
+
+- **Goal:** Proses worker mandiri tanpa Redis untuk sync quota berkala (10m), health monitoring & token refresh (30m), serta indexing file ke `drive_files` (60m).
+- **Artefak:**
+  - `src/worker/index.ts`: interval loop worker aman test (`!process.env.VITEST`).
+  - `src/lib/google-drive/indexer.ts`: `indexAccountFiles(account)` paging penuh (hingga 2.000 file/akun) dengan batch upsert ke tabel `drive_files`.
+  - Health check: deteksi akun putus/token expired → ubah status `reconnect_required`, auto-recovery ke `connected` saat pulih.
+  - Infrastruktur: service `worker` pada `docker-compose.yml`, panduan PM2/systemd VPS di README.
+  - UI: `AccountsTable` & Dashboard auto-refetch tiap 5 menit.
+- **Hasil Verifikasi:** Worker berjalan stabil di Docker/local; snapshot kuota bertambah otomatis; token rusak mengubah status UI menjadi `reconnect_required`; kegagalan 1 akun tidak mematikan worker (resilient).
+- **Catatan Handoff:** Loop worker siap dikembangkan dengan heartbeat monitoring pada Phase 3 Sesi 18.
+
+---
+
+### Sesi 13 — Advanced Search + File Preview [✅ SELESAI]
+
+- **Goal:** Pencarian file lanjutan (rentang tanggal, rentang ukuran, multi-select akun) dan dialog preview file langsung di dashboard.
+- **Artefak:**
+  - `src/lib/google-drive/query.ts`: `buildDriveQuery` diperluas (`sizeMin`, `sizeMax`, `modifiedAfter`, `modifiedBefore`).
+  - Penanganan keterbatasan Drive API: sanitasi query di `service.ts` & in-memory filtering untuk filter `size` di `GET /api/files`.
+  - API Route: `GET /api/files` mendukung multi-select `accountIds` (koma).
+  - UI: `FilesFilters` popover filter lanjutan (date range, size input MB/GB, checklist multi-akun); `PreviewDialog` (iframe viewer Google Drive + fallback link); double click baris tabel.
+- **Hasil Verifikasi:** Unit test query builder PASS; filter rentang tanggal, ukuran, dan multi-akun bekerja akurat; preview Google Doc/PDF/gambar tampil di dialog; sinkronisasi URL shallow query param berfungsi.
+- **Catatan Handoff:** Sesi 13 menutup Phase 2 dengan seluruh pipeline pengujian lulus (65 unit test).
+
+---
+
+## 6. Phase 3 — Sesi 14–18
+
+> Sesi lanjutan untuk peningkatan skala, keandalan, dan operasi massal (PRD §12 Phase 3). Aturan tetap berlaku: satu sesi = satu session opencode baru, jalankan seluruh blok verifikasi, dan perbarui tracker setelah commit.
+
+---
+
+## Sesi 14 — Drag & Drop + Concurrent Upload Queue & Retry UI [✅ SELESAI]
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 14 dari implementasi.md. Baca PRD.md §6 (Upload), §12 Phase 3 (Multi-file upload, Upload queue, Retry failed uploads, Drag & drop), lalu Global Constraints + Sesi 14. Kerjakan hanya Sesi 14, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Memungkinkan user mengunggah banyak file sekaligus via drag & drop (pada modal maupun overlay global pada halaman Files) dengan antrean upload di sisi client yang memiliki concurrency control (maksimal 2–3 file diunggah secara bersamaan), progress bar per file, tombol pembatalan (AbortController), floating drawer status di pojok kanan bawah ala Google Drive, serta fitur retry untuk file yang gagal diunggah.
+
+**Prasyarat:** Sesi 10 (Upload Mode A/B) & Sesi 13 (Halaman Files).
+
+**Consumes:** `POST /api/files/upload` (Sesi 6 & 10), tabel `upload_jobs`, `UploadDialog`.
 
 **Produces:**
-- `src/lib/upload/select-account.ts` `selectAccount(fileSize, accounts)` + unit test (contoh PRD §6.3).
-- Upload API mendukung `?mode=auto`.
-- UploadDialog: radio **Automatic / Specific account** + panel preview (kandidat ❌/✅).
+- `src/lib/upload/upload-queue.ts` (manajemen antrean upload di sisi klien, concurrency control pool, abort controller per item, status transition).
+- `src/components/upload/upload-dropzone.tsx` (komponen drop area interaktif dengan visual drag-over state).
+- `src/components/upload/upload-queue-drawer.tsx` (floating dock widget di kanan bawah layar: minimize/maximize, daftar file dengan progress bar, status icon, tombol cancel per item, dan tombol retry failed items).
+- Global drag-and-drop overlay di `/dashboard/files` (drag file desktop langsung memicu antrean upload).
+- Unit test `src/lib/__tests__/upload-queue.test.ts`.
 
 ### Langkah-langkah
 
-- [x] **1. Test algoritma (merah)**
+- [x] **1. Unit test antrean upload & concurrency pool (merah)**
 
-Buat `src/lib/__tests__/select-account.test.ts`:
+Buat `src/lib/__tests__/upload-queue.test.ts`:
 
 ```ts
-import { describe, expect, it } from 'vitest';
-import { selectAccount } from '@/lib/upload/select-account';
+import { describe, expect, it, vi } from 'vitest';
+import { UploadQueueManager, type QueueItem } from '@/lib/upload/upload-queue';
 
-describe('selectAccount', () => {
-  it('contoh PRD §6.3: file 5GB → Account B (12GB free)', () => {
-    const accounts = [
-      { id: 'A', freeBytes: 2 * 1024 ** 3 },
-      { id: 'B', freeBytes: 12 * 1024 ** 3 },
-      { id: 'C', freeBytes: 7 * 1024 ** 3 },
+describe('UploadQueueManager', () => {
+  it('membatasi concurrency maksimum sesuai konfigurasi', async () => {
+    const queue = new UploadQueueManager({ maxConcurrency: 2 });
+    let running = 0;
+    let maxRunning = 0;
+
+    const mockUploader = vi.fn(async (_item: QueueItem) => {
+      running++;
+      maxRunning = Math.max(maxRunning, running);
+      await new Promise((r) => setTimeout(r, 50));
+      running--;
+    });
+
+    queue.setUploader(mockUploader);
+
+    const dummyFiles = [
+      new File(['a'], 'a.txt', { type: 'text/plain' }),
+      new File(['b'], 'b.txt', { type: 'text/plain' }),
+      new File(['c'], 'c.txt', { type: 'text/plain' }),
+      new File(['d'], 'd.txt', { type: 'text/plain' }),
     ];
-    expect(selectAccount(5 * 1024 ** 3, accounts)?.id).toBe('B');
+
+    queue.addFiles(dummyFiles, { mode: 'auto' });
+    await queue.waitForAll();
+
+    expect(maxRunning).toBe(2);
+    expect(mockUploader).toHaveBeenCalledTimes(4);
+    expect(queue.getItems().every((item) => item.status === 'completed')).toBe(true);
   });
 
-  it('tidak ada yang muat → null', () => {
-    expect(selectAccount(100, [{ id: 'A', freeBytes: 10 }])).toBeNull();
-  });
-
-  it('freeBytes null dianggap tidak layak', () => {
-    expect(selectAccount(1, [{ id: 'A', freeBytes: null as unknown as number }])).toBeNull();
-  });
-
-  it('dipilih yang free terbesar', () => {
-    const result = selectAccount(1, [
-      { id: 'A', freeBytes: 5 },
-      { id: 'B', freeBytes: 9 },
-      { id: 'C', freeBytes: 7 },
-    ]);
-    expect(result?.id).toBe('B');
-  });
-});
-```
-
-`pnpm test` → FAIL.
-
-- [x] **2. Implementasi algoritma**
-
-Buat `src/lib/upload/select-account.ts`:
-
-```ts
-export interface AccountCandidate {
-  id: string;
-  email?: string;
-  freeBytes: number | null;
-}
-
-export function selectAccount<T extends AccountCandidate>(fileSize: number, accounts: T[]): T | null {
-  return (
-    accounts
-      .filter((a) => a.freeBytes != null && a.freeBytes >= fileSize)
-      .sort((a, b) => (b.freeBytes ?? 0) - (a.freeBytes ?? 0))
-      .at(0) ?? null
-  );
-}
-```
-
-`pnpm test` → PASS.
-
-- [x] **3. Upload API mendukung mode auto**
-
-Di `src/app/api/files/upload/route.ts`, setelah rate limit dan sebelum cek quota, sisipkan resolusi akun:
-
-```ts
-const mode = sp.get('mode') ?? 'manual';
-let resolvedAccountId = accountId;
-
-if (mode === 'auto') {
-  const accounts = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, user.id));
-  const quotas = await Promise.all(
-    accounts.map(async (a) => ({ id: a.id, email: a.email, quota: await syncQuota(a) })),
-  );
-  const picked = selectAccount(
-    contentLength,
-    quotas.map((q) => ({ id: q.id, email: q.email, freeBytes: q.quota.freeBytes })),
-  );
-  if (!picked) {
-    throw new AppError('QUOTA_EXCEEDED', 'Tidak ada akun dengan ruang cukup untuk file ini.', 413);
-  }
-  resolvedAccountId = picked.id;
-}
-```
-
-Lalu gunakan `resolvedAccountId` untuk `getAccountForUser` (dan buang cek quota manual kedua yang duplikat — syncQuota sudah dipanggil saat seleksi; untuk mode manual tetap sync + cek seperti Sesi 6).
-
-- [x] **4. UI UploadDialog Mode B**
-
-Di `src/components/upload/upload-dialog.tsx`:
-- RadioGroup **Upload destination**: `● Automatic` / `○ Specific account`.
-- Mode Automatic: setelah file dipilih + data `['storage']` ada, hitung kandidat dengan `selectAccount(file.size, accounts)` dan render panel:
-
-```text
-File: video.zip (8.0 GB)
-
-account1@gmail.com — Free: 1.2 GB   ❌
-account2@gmail.com — Free: 10.3 GB  ✅
-→ Upload ke account2@gmail.com
-```
-
-- Bila tidak ada yang muat → tombol upload disabled + pesan `QUOTA_EXCEEDED`.
-- Kirim: `mode=auto` tanpa `accountId`, atau `mode=manual&accountId=...`.
-- Setelah sukses, invalidasi `['storage']` (free space akun tujuan berubah).
-
-- [x] **5. Pipeline + commit**
-
-```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
-git add -A && git commit -m "feat: automatic account selection for uploads (mode B)"
-```
-
-### Verifikasi
-
-- [x] `pnpm test` → 4 test `selectAccount` PASS (termasuk contoh PRD)
-- [x] Mode Automatic, file kecil → terpilih akun dengan free terbesar (cek logika preview UI == yang dipakai API)
-- [x] Mode Automatic, file lebih besar dari total free semua akun → ditolak dengan pesan jelas
-- [x] Upload selesai → free space akun tujuan berkurang di dashboard (snapshot terbaru)
-- [x] Mode Specific account tetap berfungsi seperti Sesi 6
-- [x] Pipeline lulus
-
-### Handoff
-
-- [x] Commit terakhir sesi 10
-- [x] Update baris **Sesi 10** di tracker: ✅, tanggal, catatan
-
----
-
-## Sesi 11 — Activity Log Page + Statistik
-
-> **Prompt sesi baru:** `Kamu mengerjakan Sesi 11 dari implementasi.md. Baca PRD.md §7 (Statistik) dan §3.2 (Secondary Goals: activity log, storage analytics), lalu Global Constraints + Sesi 11. Kerjakan hanya Sesi 11, verifikasi lulus, commit, update tracker.`
-
-**Goal:** Halaman Activity menampilkan riwayat aksi (filter + pagination sederhana); halaman Statistik menampilkan Total/Used/Free, jumlah file per jenis (dari index `drive_files`), dan riwayat pemakaian storage dari `storage_snapshots`.
-
-**Prasyarat:** Sesi 8 (Sesi 9/10 opsional tapi disarankan agar log rename/move ikut teruji).
-
-**Consumes:** `GET /api/activity` (Sesi 7), tabel `activity_logs`, `drive_files` (Sesi 5), `storage_snapshots` (Sesi 1).
-
-**Produces:**
-- `GET /api/activity` (lengkap: filter action/account + pagination), `GET /api/stats`.
-- Halaman `/dashboard/activity` (`ActivityTable`), halaman `/dashboard/stats` (`StatsCards` + chart) + menu sidebar **Stats**.
-- `pnpm add recharts`.
-
-### Langkah-langkah
-
-- [x] **1. Install recharts**
-
-```bash
-pnpm add recharts
-```
-
-- [x] **2. API activity lengkap**
-
-Perbarui `src/app/api/activity/route.ts` — tambahkan query param `action`, `accountId`, `page` (default 1), `pageSize` (default 20, max 100):
-
-```ts
-import { desc, eq, and } from 'drizzle-orm';
-import { db } from '@/db';
-import { activityLogs, googleAccounts } from '@/db/schema';
-import { ok, withAuth } from '@/lib/http';
-import { getAccountForUser } from '@/lib/google/tokens';
-
-export const GET = withAuth(async (user, req) => {
-  const sp = req.nextUrl.searchParams;
-  const action = sp.get('action');
-  const accountId = sp.get('accountId');
-  const page = Math.max(Number(sp.get('page') ?? 1), 1);
-  const pageSize = Math.min(Math.max(Number(sp.get('pageSize') ?? 20), 1), 100);
-
-  const conditions = [eq(activityLogs.userId, user.id)];
-  if (action) conditions.push(eq(activityLogs.action, action));
-  if (accountId) {
-    await getAccountForUser(user.id, accountId);
-    conditions.push(eq(activityLogs.googleAccountId, accountId));
-  }
-
-  const where = and(...conditions);
-  const rows = await db
-    .select({
-      id: activityLogs.id,
-      action: activityLogs.action,
-      fileId: activityLogs.fileId,
-      metadata: activityLogs.metadata,
-      createdAt: activityLogs.createdAt,
-      email: googleAccounts.email,
-    })
-    .from(activityLogs)
-    .leftJoin(googleAccounts, eq(activityLogs.googleAccountId, googleAccounts.id))
-    .where(where)
-    .orderBy(desc(activityLogs.createdAt))
-    .limit(pageSize)
-    .offset((page - 1) * pageSize);
-
-  return ok({ activity: rows, page, pageSize });
-});
-```
-
-- [x] **3. API statistik**
-
-Buat `src/app/api/stats/route.ts`:
-
-```ts
-import { desc, eq, sql } from 'drizzle-orm';
-import { db } from '@/db';
-import { activityLogs, driveFiles, googleAccounts, storageSnapshots } from '@/db/schema';
-import { ok, withAuth } from '@/lib/http';
-import { latestSnapshot } from '@/lib/quota';
-
-export const GET = withAuth(async (user) => {
-  const accounts = await db.select().from(googleAccounts).where(eq(googleAccounts.userId, user.id));
-  const accountIds = accounts.map((a) => a.id);
-
-  const snapshots = await Promise.all(accountIds.map((id) => latestSnapshot(id)));
-  const totalBytes = snapshots.reduce((sum, s) => sum + (s?.totalBytes ?? 0), 0);
-  const usedBytes = snapshots.reduce((sum, s) => sum + (s?.usedBytes ?? 0), 0);
-  const anyUnknownLimit = snapshots.some((s) => s?.totalBytes == null);
-
-  const byKind = await db
-    .select({
-      kind: driveFiles.kind,
-      count: sql<number>`count(*)::int`,
-      totalSize: sql<number>`coalesce(sum(${driveFiles.sizeBytes}), 0)::bigint`,
-    })
-    .from(driveFiles)
-    .where(sql`${driveFiles.googleAccountId} in ${accountIds}`)
-    .groupBy(driveFiles.kind);
-
-  const history = await db
-    .select()
-    .from(storageSnapshots)
-    .where(sql`${storageSnapshots.googleAccountId} in ${accountIds}`)
-    .orderBy(desc(storageSnapshots.createdAt))
-    .limit(60);
-
-  const recentActions = await db
-    .select({ action: activityLogs.action, count: sql<number>`count(*)::int` })
-    .from(activityLogs)
-    .where(eq(activityLogs.userId, user.id))
-    .groupBy(activityLogs.action);
-
-  return ok({
-    totals: {
-      totalBytes: anyUnknownLimit ? null : totalBytes,
-      usedBytes,
-      freeBytes: anyUnknownLimit ? null : Math.max(totalBytes - usedBytes, 0),
-      accountCount: accounts.length,
-    },
-    fileKinds: byKind,
-    snapshotHistory: history.reverse(),
-    actionCounts: recentActions,
-  });
-});
-```
-
-> Jika Drizzle gagal mem-parsing `in ${array}`, tulis dengan `sql.join`/parameter binding eksplisit: `` sql`${driveFiles.googleAccountId} in (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})` `` — pastikan query jalan (uji lewat endpoint).
-
-- [x] **4. Halaman Activity**
-
-Buat `src/components/activity/activity-table.tsx` (client):
-- Filter: Select action (semua aksi dari `ActivityAction`), Select akun (dari `GET /api/storage`).
-- Tabel: **Waktu** (`formatDateTime`), **Aksi** (Badge warna per aksi), **Akun**, **Detail** (nama file/`fileId` dari `metadata`), **File** (tautan `https://drive.google.com/open?id=` bila `fileId` ada).
-- Pagination: tombol Prev/Next (state `page`), state loading skeleton, empty state "Belum ada aktivitas."
-- Fetch `['activity', { action, accountId, page }]`.
-
-`src/app/dashboard/activity/page.tsx` → render `<ActivityTable />`.
-
-- [x] **5. Halaman Statistik**
-
-Buat `src/components/stats/stats-cards.tsx` + `stats-charts.tsx`:
-- Ringkasan: Total / Used / Free / Accounts + **Total Files** (jumlah semua `fileKinds`).
-- **File per jenis** (bar chart atau table): Documents, Images, Videos, Archives, Others, Folders (sesuai PRD §7) dengan count + total size.
-- **Riwayat pemakaian** (recharts `AreaChart`): sumbu X `createdAt`, sumbu Y `usedBytes` (formatBytes via tick formatter) dari `snapshotHistory` (agregat per timestamp bila ada banyak akun — kelompokkan per `createdAt` bulan/hari: untuk MVP cukup garis total per snapshot terurut dengan fallback `snapshotAt`).
-- **Action counts**: daftar aksi + jumlah.
-
-`src/app/dashboard/stats/page.tsx` → render komponen di atas (fetch `['stats']`).
-
-Tambahkan menu **Stats** (`/dashboard/stats`, ikon `BarChart3`) di `src/components/layout/sidebar.tsx` setelah Activity.
-
-- [x] **6. Pipeline + commit**
-
-```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
-git add -A && git commit -m "feat: activity log page and storage/file statistics"
-```
-
-### Verifikasi
-
-- [x] Halaman Activity menampilkan aksi dari sesi sebelumnya (upload/delete/rename/move), filter action & akun berfungsi, pagination jalan
-- [x] `GET /api/activity?action=file.upload` hanya berisi `file.upload`
-- [x] Halaman Stats: Total/Used/Free **sama** dengan Dashboard; Total Files ≥ jumlah file yang pernah terlihat di Files
-- [x] Distribusi jenis file masuk akal (Images/Images sesuai isi Drive); chart riwayat tampil setelah ≥2 snapshot
-- [x] Query cross-user aman: user kedua (buat akun baru) tidak melihat activity/stats user pertama
-- [x] Pipeline lulus
-
-### Handoff
-
-- [x] Commit terakhir sesi 11
-- [x] Update baris **Sesi 11** di tracker: ✅, tanggal, catatan (mis. "statistik bergantung pada kelengkapan index `drive_files`; background sync Sesi 12 memperbarui index")
-
----
-
-## Sesi 12 — Background Sync (Worker) + Account Health Monitoring
-
-> **Prompt sesi baru:** `Kamu mengerjakan Sesi 12 dari implementasi.md. Baca PRD.md §10.2 (Account Health), §8.1 (Background Jobs — Redis tidak wajib), §12 Phase 2 (Background sync), lalu Global Constraints + Sesi 12. Kerjakan hanya Sesi 12, verifikasi lulus, commit, update tracker.`
-
-**Goal:** Proses worker terpisah melakukan sync quota berkala, refresh index `drive_files`, dan health check semua akun semua user; status akun di UI selalu terkini tanpa aksi manual.
-
-**Prasyarat:** Sesi 11.
-
-**Consumes:** `syncQuota`, `GoogleDriveService`, tabel `google_accounts` + `drive_files`, badge health (Sesi 8).
-
-**Produces:**
-- `src/worker/index.ts` (interval loop, tanpa Redis — sesuai catatan PRD §8.1).
-- Fungsi `indexAccountFiles(account)` (paging penuh, upsert `drive_files`).
-- Health check → update `google_accounts.status`.
-- Service Docker `worker` + dokumentasi di README.
-
-### Langkah-langkah
-
-- [x] **1. Indexing helper**
-
-Buat `src/lib/google-drive/indexer.ts`:
-
-```ts
-import { eq } from 'drizzle-orm';
-import { db } from '@/db';
-import { driveFiles, type GoogleAccount } from '@/db/schema';
-import { GoogleDriveService } from '@/lib/google-drive/service';
-import { classifyMime } from '@/lib/files/mime';
-
-const MAX_PAGES = 20;
-const PAGE_SIZE = 100;
-
-export async function indexAccountFiles(account: GoogleAccount): Promise<number> {
-  const service = await GoogleDriveService.forAccount(account);
-  let pageToken: string | undefined;
-  let indexed = 0;
-
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const result = await service.listFiles({
-      q: 'trashed = false',
-      pageSize: PAGE_SIZE,
-      pageToken,
-      orderBy: 'modifiedTime desc',
-    });
-    if (result.files.length === 0) break;
-
-    await db
-      .insert(driveFiles)
-      .values(result.files.map((f) => ({
-        googleAccountId: account.id,
-        driveFileId: f.id,
-        name: f.name,
-        mimeType: f.mimeType,
-        kind: classifyMime(f.mimeType),
-        sizeBytes: f.sizeBytes,
-        modifiedAt: f.modifiedAt ? new Date(f.modifiedAt) : null,
-        parentId: f.parentId,
-        indexedAt: new Date(),
-      })))
-      .onConflictDoUpdate({
-        target: [driveFiles.googleAccountId, driveFiles.driveFileId],
-        set: {
-          name: sql`excluded.name`, mimeType: sql`excluded.mime_type`,
-          kind: sql`excluded.kind`, sizeBytes: sql`excluded.size_bytes`,
-          modifiedAt: sql`excluded.modified_at`, parentId: sql`excluded.parent_id`,
-          indexedAt: sql`excluded.indexed_at`,
-        },
+  it('bisa membatalkan item yang sedang berjalan via AbortController', async () => {
+    const queue = new UploadQueueManager({ maxConcurrency: 1 });
+    const mockUploader = vi.fn(async (item: QueueItem) => {
+      await new Promise((resolve, reject) => {
+        item.abortController?.signal.addEventListener('abort', () => reject(new Error('Aborted')));
       });
+    });
 
-    indexed += result.files.length;
-    if (!result.nextPageToken) break;
-    pageToken = result.nextPageToken;
-  }
+    queue.setUploader(mockUploader);
+    const file = new File(['test'], 'cancel.txt', { type: 'text/plain' });
+    const [item] = queue.addFiles([file], { mode: 'auto' });
 
-  return indexed;
-}
+    setTimeout(() => {
+      queue.cancelItem(item.id);
+    }, 10);
+
+    await queue.waitForAll();
+    expect(queue.getItem(item.id)?.status).toBe('cancelled');
+  });
+
+  it('dapat mengulang file yang gagal (retry)', async () => {
+    const queue = new UploadQueueManager({ maxConcurrency: 1 });
+    let attempt = 0;
+    const mockUploader = vi.fn(async () => {
+      attempt++;
+      if (attempt === 1) throw new Error('Network error');
+    });
+
+    queue.setUploader(mockUploader);
+    const file = new File(['fail'], 'retry.txt', { type: 'text/plain' });
+    const [item] = queue.addFiles([file], { mode: 'auto' });
+
+    await queue.waitForAll();
+    expect(queue.getItem(item.id)?.status).toBe('failed');
+
+    // Retry
+    queue.retryItem(item.id);
+    await queue.waitForAll();
+    expect(queue.getItem(item.id)?.status).toBe('completed');
+  });
+});
 ```
 
-(Impor `sql` dari `drizzle-orm`.)
+Jalankan `pnpm test src/lib/__tests__/upload-queue.test.ts` → FAIL.
 
-- [x] **2. Health check**
+- [x] **2. Implementasi UploadQueueManager**
 
-Buat `src/lib/google/health.ts`:
-
-```ts
-import { eq } from 'drizzle-orm';
-import { db } from '@/db';
-import { googleAccounts, type GoogleAccount } from '@/db/schema';
-import { GoogleDriveService } from '@/lib/google-drive/service';
-import { AppError } from '@/lib/errors';
-
-export type HealthStatus = 'connected' | 'reconnect_required' | 'error';
-
-export async function checkAccountHealth(account: GoogleAccount): Promise<HealthStatus> {
-  try {
-    const service = await GoogleDriveService.forAccount(account);
-    await service.getStorageQuota();
-    return 'connected';
-  } catch (error) {
-    const status: HealthStatus =
-      error instanceof AppError && error.code === 'ACCOUNT_DISCONNECTED' ? 'reconnect_required' : 'error';
-    await db
-      .update(googleAccounts)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(googleAccounts.id, account.id));
-    return status;
-  }
-}
-```
-
-- [x] **3. Worker loop**
-
-Buat `src/worker/index.ts`:
+Buat `src/lib/upload/upload-queue.ts`:
 
 ```ts
-import 'dotenv/config';
-import { eq } from 'drizzle-orm';
-import { db } from '@/db';
-import { googleAccounts } from '@/db/schema';
-import { syncQuota } from '@/lib/quota';
-import { checkAccountHealth } from '@/lib/google/health';
-import { indexAccountFiles } from '@/lib/google-drive/indexer';
+export type UploadStatus = 'queued' | 'uploading' | 'completed' | 'failed' | 'cancelled';
 
-const QUOTA_INTERVAL_MS = 10 * 60_000;
-const HEALTH_INTERVAL_MS = 30 * 60_000;
-const INDEX_INTERVAL_MS = 60 * 60_000;
-
-async function safe(label: string, fn: () => Promise<void>) {
-  try {
-    await fn();
-  } catch (error) {
-    console.error(`[worker] ${label} gagal`, error instanceof Error ? error.message : error);
-  }
+export interface QueueItem {
+  id: string;
+  file: File;
+  accountId?: string;
+  folderId?: string;
+  mode: 'auto' | 'manual';
+  status: UploadStatus;
+  progress: number; // 0 - 100
+  error?: string;
+  abortController?: AbortController;
+  uploadedAt?: Date;
 }
 
-async function syncAllQuota() {
-  const accounts = await db.select().from(googleAccounts);
-  for (const account of accounts) {
-    await safe(`quota ${account.email}`, async () => { await syncQuota(account); });
-  }
-  console.log(`[worker] quota sync selesai untuk ${accounts.length} akun`);
-}
+export type QueueListener = (items: QueueItem[]) => void;
+export type FileUploader = (item: QueueItem, onProgress: (pct: number) => void) => Promise<void>;
 
-async function healthAll() {
-  const accounts = await db.select().from(googleAccounts);
-  for (const account of accounts) {
-    const status = await checkAccountHealth(account);
-    if (status !== 'connected') console.warn(`[worker] ${account.email} → ${status}`);
-  }
-}
+export class UploadQueueManager {
+  private items: Map<string, QueueItem> = new Map();
+  private maxConcurrency: number;
+  private activeUploads = 0;
+  private listeners: Set<QueueListener> = new Set();
+  private uploader?: FileUploader;
+  private allDoneResolvers: Array<() => void> = [];
 
-async function indexAll() {
-  const accounts = await db.select().from(googleAccounts).where(eq(googleAccounts.status, 'connected'));
-  for (const account of accounts) {
-    await safe(`index ${account.email}`, async () => {
-      const count = await indexAccountFiles(account);
-      console.log(`[worker] ${account.email}: ${count} file terindeks`);
+  constructor(options: { maxConcurrency?: number } = {}) {
+    this.maxConcurrency = options.maxConcurrency ?? 2;
+  }
+
+  setUploader(uploader: FileUploader) {
+    this.uploader = uploader;
+  }
+
+  subscribe(listener: QueueListener): () => void {
+    this.listeners.add(listener);
+    listener(this.getItems());
+    return () => this.listeners.delete(listener);
+  }
+
+  private notify() {
+    const list = this.getItems();
+    this.listeners.forEach((cb) => cb(list));
+    if (this.activeUploads === 0 && !list.some((i) => i.status === 'queued')) {
+      const resolvers = [...this.allDoneResolvers];
+      this.allDoneResolvers = [];
+      resolvers.forEach((r) => r());
+    }
+  }
+
+  getItems(): QueueItem[] {
+    return Array.from(this.items.values());
+  }
+
+  getItem(id: string): QueueItem | undefined {
+    return this.items.get(id);
+  }
+
+  addFiles(files: File[], options: { accountId?: string; folderId?: string; mode: 'auto' | 'manual' }): QueueItem[] {
+    const newItems: QueueItem[] = files.map((file) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const item: QueueItem = {
+        id,
+        file,
+        accountId: options.accountId,
+        folderId: options.folderId,
+        mode: options.mode,
+        status: 'queued',
+        progress: 0,
+        abortController: new AbortController(),
+      };
+      this.items.set(id, item);
+      return item;
+    });
+
+    this.notify();
+    this.processQueue();
+    return newItems;
+  }
+
+  private async processQueue() {
+    if (!this.uploader) return;
+
+    while (this.activeUploads < this.maxConcurrency) {
+      const nextItem = Array.from(this.items.values()).find((i) => i.status === 'queued');
+      if (!nextItem) break;
+
+      this.activeUploads++;
+      nextItem.status = 'uploading';
+      nextItem.error = undefined;
+      nextItem.abortController = new AbortController();
+      this.notify();
+
+      this.executeUpload(nextItem);
+    }
+  }
+
+  private async executeUpload(item: QueueItem) {
+    try {
+      await this.uploader!(item, (pct) => {
+        item.progress = pct;
+        this.notify();
+      });
+      item.status = 'completed';
+      item.progress = 100;
+      item.uploadedAt = new Date();
+    } catch (err: any) {
+      if (item.abortController?.signal.aborted || err?.message === 'Aborted') {
+        item.status = 'cancelled';
+      } else {
+        item.status = 'failed';
+        item.error = err instanceof Error ? err.message : 'Upload gagal';
+      }
+    } finally {
+      this.activeUploads--;
+      this.notify();
+      this.processQueue();
+    }
+  }
+
+  cancelItem(id: string) {
+    const item = this.items.get(id);
+    if (!item) return;
+    if (item.status === 'uploading') {
+      item.abortController?.abort();
+      item.status = 'cancelled';
+    } else if (item.status === 'queued') {
+      item.status = 'cancelled';
+    }
+    this.notify();
+  }
+
+  retryItem(id: string) {
+    const item = this.items.get(id);
+    if (!item || (item.status !== 'failed' && item.status !== 'cancelled')) return;
+    item.status = 'queued';
+    item.progress = 0;
+    item.error = undefined;
+    this.notify();
+    this.processQueue();
+  }
+
+  retryAllFailed() {
+    for (const item of this.items.values()) {
+      if (item.status === 'failed') {
+        item.status = 'queued';
+        item.progress = 0;
+        item.error = undefined;
+      }
+    }
+    this.notify();
+    this.processQueue();
+  }
+
+  clearFinished() {
+    for (const [id, item] of this.items.entries()) {
+      if (item.status === 'completed' || item.status === 'cancelled') {
+        this.items.delete(id);
+      }
+    }
+    this.notify();
+  }
+
+  waitForAll(): Promise<void> {
+    if (this.activeUploads === 0 && !Array.from(this.items.values()).some((i) => i.status === 'queued')) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.allDoneResolvers.push(resolve);
     });
   }
 }
 
-console.log('[worker] mulai — quota 10m, health 30m, index 60m');
-await syncAllQuota();
-await healthAll();
-await indexAll();
-
-setInterval(() => safe('quota loop', syncAllQuota), QUOTA_INTERVAL_MS);
-setInterval(() => safe('health loop', healthAll), HEALTH_INTERVAL_MS);
-setInterval(() => safe('index loop', indexAll), INDEX_INTERVAL_MS);
+// Global singleton instance for application client
+export const globalUploadQueue = new UploadQueueManager({ maxConcurrency: 2 });
 ```
 
-Catatan: top-level await butuh ESM/tsx (sudah dipakai via `pnpm worker`).
+Jalankan `pnpm test src/lib/__tests__/upload-queue.test.ts` → PASS.
 
-- [x] **4. Docker service worker**
+- [x] **3. Komponen UploadDropzone**
 
-Tambahkan ke `docker-compose.yml`:
+Buat `src/components/upload/upload-dropzone.tsx`:
+- Render area drag-and-drop dengan border dashed Tailwind (`border-dashed border-2 p-6 rounded-lg text-center cursor-pointer hover:border-primary transition-colors`).
+- Tangani event: `onDragOver`, `onDragLeave`, `onDrop`. Tampilkan highlight visual saat `isDragging` bernilai true.
+- Sediakan input file tersembunyi (`<input type="file" multiple />`) dengan trigger klik area.
+- Tampilkan informasi: ikon `UploadCloud`, teks "Tarik & lepas file di sini atau klik untuk memilih file", keterangan batas ukuran dan multi-file.
 
-```yaml
-  worker:
-    image: node:22-alpine
-    working_dir: /app
-    command: sh -c "corepack enable && pnpm install --frozen-lockfile && pnpm worker"
-    environment:
-      DATABASE_URL: postgresql://gdrive:gdrive@postgres:5432/gdrive_manager
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
-      APP_URL: ${APP_URL}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
-      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY}
-    volumes:
-      - .:/app
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-```
+- [x] **4. Komponen Floating UploadQueueDrawer**
 
-(Di VPS produksi lebih baik jalankan worker via systemd/pm2 `pnpm worker`; catat di README.)
+Buat `src/components/upload/upload-queue-drawer.tsx`:
+- Posisi fixed mengambang di pojok kanan bawah: `fixed bottom-4 right-4 w-80 md:w-96 shadow-2xl border bg-background/95 backdrop-blur rounded-xl z-50 overflow-hidden`.
+- Tampil otomatis saat ada minimal 1 file dalam `globalUploadQueue`.
+- Header:
+  - Jumlah file aktif/selesai: mis. "Mengunggah 2 dari 5 file".
+  - Icon minimize/maximize (ChevronDown / ChevronUp).
+  - Tombol tutup/bersihkan selesai (X).
+- Body (saat expanded):
+  - Daftar file dengan scrollbar:
+    - Nama file + ukuran file formatBytes.
+    - Status icon: loader berputar (`uploading`), centang hijau (`completed`), segitiga merah (`failed`), abu-abu (`queued`).
+    - Progress bar linear (`<Progress value={item.progress} />`).
+    - Aksi baris: tombol Cancel (`X`) saat mengunggah, tombol Retry (`RotateCw`) saat gagal dengan tooltip pesan error.
+- Footer:
+  - Ringkasan status dan tombol "Retry All Failed" jika terdapat file gagal.
+- Integrasikan uploader default ke `globalUploadQueue` menggunakan fetch ke `POST /api/files/upload`:
+  - Gunakan `XMLHttpRequest` atau `fetch` streaming untuk membaca `progress`.
+  - Pasang `signal: item.abortController?.signal`.
+  - Invalidate TanStack query `['files']` dan `['storage']` setelah selesai.
 
-- [x] **5. UI: status real-time**
+- [x] **5. Integrasi ke UploadDialog dan Global Drag-Drop di Halaman Files**
 
-- `AccountsTable`: `refetchInterval: 5 * 60_000` (bukan hanya manual), badge mengikuti `status` dari server (sudah ada).
-- Dashboard `['storage']` refekInterval serupa.
-- Tambahkan info kecil "Diperbarui otomatis tiap 10 menit" di header Accounts.
+- Di `src/components/upload/upload-dialog.tsx`:
+  - Ganti input file biasa dengan `<UploadDropzone onFilesSelected={...} />`.
+  - Saat tombol "Upload" diklik pada modal, masukkan seluruh file terpilih ke `globalUploadQueue.addFiles(...)`, tutup modal, dan biarkan floating drawer menangani upload di latar belakang.
+- Di `src/app/dashboard/files/page.tsx`:
+  - Tambahkan global drag listener pada container dashboard:
+    - Jika user menyeret file dari sistem operasi ke dalam halaman Files, munculkan backdrop overlay transparan dengan border dashed biru: "Lepaskan file untuk mulai mengunggah ke Google Drive".
+    - Event `drop` langsung mendaftarkan file ke `globalUploadQueue` dengan mode `auto` (atau akun aktif) tanpa mewajibkan pembukaan modal secara manual lebih dulu.
+- Pasang `<UploadQueueDrawer />` di `src/app/dashboard/layout.tsx` sehingga drawer tetap tampil dan upload tidak terputus saat user berpindah halaman di dashboard.
 
 - [x] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
-git add -A && git commit -m "feat: background worker for quota sync, health check and file indexing"
+git add -A && git commit -m "feat: drag-and-drop and concurrent upload queue with retry UI"
 ```
 
 ### Verifikasi
 
-- [x] `docker compose up -d worker` → log menampilkan `[worker] mulai` + hasil sync/index tanpa error
-- [x] `select max(created_at) from storage_snapshots` bertambah dalam 10 menit (atau panggil `syncAllQuota` manual via `pnpm worker` sekali lalu hentikan)
-- [x] Set refresh token 1 akun jadi rusak → dalam ≤30 menit statusnya `reconnect_required` (atau paksa dengan menjalankan health check manual)
-- [x] `select count(*) from drive_files` naik signifikan setelah index loop (≥ 100 file bila Drive punya lebih)
-- [x] Worker tidak meng-crash saat 1 akun gagal (log error, loop lanjut)
-- [x] Pipeline lulus
+- [x] `pnpm test src/lib/__tests__/upload-queue.test.ts` → PASS
+- [x] Drag & drop 4 file sekaligus ke UploadDialog → semua file masuk ke queue drawer
+- [x] Maksimal 2 upload berjalan paralel; file ke-3 dan ke-4 menunggu giliran (status `queued`)
+- [x] Drag file langsung ke halaman `/dashboard/files` menampilkan overlay drop dan memasukkan file ke queue
+- [x] Klik tombol Cancel pada item yang sedang jalan membatalkan upload via AbortController
+- [x] Simulasi gagal (mis. file terlalu besar / server error) memunculkan status `failed` dan tombol Retry
+- [x] Klik Retry mengunggah ulang file yang gagal tanpa perlu memilih ulang dari file system
+- [x] Drawer kanan bawah dapat di-collapse (minimize) dan di-expand
+- [x] Pindah halaman dashboard (ke `/dashboard/accounts` atau `/dashboard/activity`) tidak membatalkan upload yang sedang berjalan
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [x] Commit terakhir sesi 12
-- [x] Update baris **Sesi 12** di tracker: ✅, tanggal, catatan (interval, cara deploy worker di VPS)
+- [x] Commit terakhir sesi 14
+- [x] Update baris **Sesi 14** di tracker: ✅, tanggal, catatan handoff (concurrency limit, drawer state)
 
 ---
 
-## Sesi 13 — Advanced Search + File Preview
+## Sesi 15 — Large File Resumable Upload & Network Resilience
 
-> **Prompt sesi baru:** `Kamu mengerjakan Sesi 13 dari implementasi.md. Baca PRD.md §5.7, §12 Phase 2 (Advanced search, File preview), lalu Global Constraints + Sesi 13. Kerjakan hanya Sesi 13, verifikasi lulus, commit, update tracker.`
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 15 dari implementasi.md. Baca PRD.md §6.2 (Large file handling), §12 Phase 3 (Resumable retry, chunk manual), lalu Global Constraints + Sesi 15. Kerjakan hanya Sesi 15, verifikasi lulus, commit, update tracker.`
 
-**Goal:** Pencarian file lanjutan (rentang ukuran, tanggal, multi-akun, jenis) dan preview file langsung di aplikasi.
+**Goal:** Mendukung pengunggahan file berukuran besar (>50 MB hingga multi-GB) secara tangguh menggunakan protokol Google Drive Resumable Upload berbasis chunk byte-range, pencatatan session URI dan byte progress di tabel `upload_jobs`, serta kemampuan resume dari byte offset terakhir jika koneksi terputus di tengah jalan tanpa mengulang dari awal.
 
-**Prasyarat:** Sesi 11 (idealnya 12, agar index terbaru).
+**Prasyarat:** Sesi 14 (Upload queue & retry).
 
-**Consumes:** `buildDriveQuery` (Sesi 5), `GET /api/files`, `FilesTable`, tabel `drive_files`.
+**Consumes:** `GoogleDriveService`, `UPLOAD_BASE`, tabel `upload_jobs`, `src/lib/upload/upload-queue.ts`.
 
 **Produces:**
-- `buildDriveQuery` diperluas: `sizeMin/sizeMax` (byte), `modifiedAfter/modifiedBefore`, `accountId[]` multi.
-- UI filter lanjutan (popover: tanggal + ukuran + multi-select akun).
-- `PreviewDialog` (iframe Google Drive viewer + fallback).
+- Migrasi skema: kolom `resumableUri` (text) dan `uploadedBytes` (bigint) pada tabel `upload_jobs`.
+- Method `GoogleDriveService`:
+  - `initiateResumableSession(meta)`: mendapatkan resumable upload URL dari Google Drive.
+  - `getResumableOffset(sessionUri, fileSize)`: mengecek byte range yang sudah diterima Google Drive (`PUT` dengan `Content-Range: bytes */fileSize`).
+  - `uploadChunk(sessionUri, chunk, startByte, totalSize)`: mengirim potongan chunk byte range ke Google API.
+- API Endpoints:
+  - `POST /api/files/upload/session`: inisiasi sesi resumable Google dan buat record `upload_jobs` status `uploading`.
+  - `PUT /api/files/upload/chunk`: menerima chunk binary dengan header `Content-Range`, meneruskan ke Google Drive, mengembalikan offset terbaru.
+  - `GET /api/files/upload/session/[id]/status`: query Google Drive untuk mengetahui byte offset yang tersimpan untuk auto-resume.
+- Helper client `src/lib/upload/chunked-uploader.ts` terintegrasi dengan `UploadQueueManager`.
+- Unit test `src/lib/__tests__/chunked-upload.test.ts`.
 
 ### Langkah-langkah
 
-- [x] **1. Test query builder lanjutan (merah)**
+- [ ] **1. Migrasi skema database upload_jobs**
 
-Perbarui `src/lib/__tests__/query.test.ts`, tambahkan:
+Perbarui `src/db/schema/upload-jobs.ts`:
+Tambahkan kolom `resumableUri` dan `uploadedBytes`:
 
 ```ts
-it('rentang ukuran dan tanggal', () => {
-  const q = buildDriveQuery({
-    sizeMin: 1024,
-    sizeMax: 1048576,
-    modifiedAfter: '2026-01-01T00:00:00Z',
-    modifiedBefore: '2026-02-01T00:00:00Z',
+export const uploadJobs = pgTable('upload_jobs', {
+  id: text('id')
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  googleAccountId: text('google_account_id')
+    .notNull()
+    .references(() => googleAccounts.id, { onDelete: 'cascade' }),
+  filename: text('filename').notNull(),
+  fileSize: bigint('file_size', { mode: 'number' }).notNull(),
+  status: text('status', { enum: ['pending', 'uploading', 'completed', 'failed'] })
+    .notNull()
+    .default('pending'),
+  resumableUri: text('resumable_uri'),
+  uploadedBytes: bigint('uploaded_bytes', { mode: 'number' }).notNull().default(0),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+});
+```
+
+Jalankan perintah migrasi:
+```bash
+pnpm drizzle-kit generate
+pnpm drizzle-kit push
+```
+
+- [ ] **2. Unit test chunking & Google 308 resume range (merah)**
+
+Buat `src/lib/__tests__/chunked-upload.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { parseResumeOffset, buildContentRangeHeader } from '@/lib/upload/chunk-helpers';
+
+describe('Chunk Helpers', () => {
+  it('membuat header Content-Range dengan benar', () => {
+    const header = buildContentRangeHeader(0, 5242879, 15000000);
+    expect(header).toBe('bytes 0-5242879/15000000');
   });
-  expect(q).toContain('size > 1024');
-  expect(q).toContain('size < 1048576');
-  expect(q).toContain("modifiedTime > '2026-01-01T00:00:00.000Z'");
-  expect(q).toContain("modifiedTime < '2026-02-01T00:00:00.000Z'");
-});
 
-it('sortir partikel tidak merusak query', () => {
-  expect(buildDriveQuery({ search: "a' and name contains 'b" })).not.toContain("contains 'a' and name contains 'b'");
+  it('mengurai header Range respons Google 308', () => {
+    // Google mengembalikan header: Range: bytes=0-5242879
+    const offset = parseResumeOffset('bytes=0-5242879');
+    expect(offset).toBe(5242880);
+  });
+
+  it('mengembalikan 0 jika header Range tidak ada atau kosong', () => {
+    expect(parseResumeOffset(null)).toBe(0);
+    expect(parseResumeOffset('')).toBe(0);
+  });
 });
 ```
 
-`pnpm test` → FAIL.
+Jalankan `pnpm test src/lib/__tests__/chunked-upload.test.ts` → FAIL.
 
-- [x] **2. Perluas `DriveFileFilters` + `buildDriveQuery`**
+- [ ] **3. Implementasi helper chunk & service methods**
+
+Buat `src/lib/upload/chunk-helpers.ts`:
 
 ```ts
-export interface DriveFileFilters {
-  search?: string;
-  kind?: FileKind;
-  sizeMin?: number;
-  sizeMax?: number;
-  modifiedAfter?: string;
-  modifiedBefore?: string;
+export function buildContentRangeHeader(start: number, end: number, total: number): string {
+  return `bytes ${start}-${end}/${total}`;
 }
 
-export function buildDriveQuery(filters: DriveFileFilters): string {
-  const parts = ['trashed = false'];
-  if (filters.search?.trim()) parts.push(`name contains '${escapeQuote(filters.search.trim())}'`);
-  const kindSql = filters.kind ? KIND_SQL[filters.kind] : undefined;
-  if (kindSql) parts.push(kindSql);
-  if (filters.sizeMin != null) parts.push(`size > ${Math.floor(filters.sizeMin)}`);
-  if (filters.sizeMax != null) parts.push(`size < ${Math.floor(filters.sizeMax)}`);
-  if (filters.modifiedAfter) parts.push(`modifiedTime > '${new Date(filters.modifiedAfter).toISOString()}'`);
-  if (filters.modifiedBefore) parts.push(`modifiedTime < '${new Date(filters.modifiedBefore).toISOString()}'`);
-  return parts.join(' and ');
+export function parseResumeOffset(rangeHeader: string | null): number {
+  if (!rangeHeader) return 0;
+  const match = rangeHeader.match(/bytes=0-(\d+)/);
+  if (!match) return 0;
+  return Number(match[1]) + 1;
 }
 ```
 
-Panggilan di `GET /api/files` diperluas: baca `sizeMin`, `sizeMax`, `modifiedAfter`, `modifiedBefore` dari searchParams (parse angka dengan validasi; nilai tidak valid → `VALIDATION`).
+Tambahkan method di `src/lib/google-drive/service.ts`:
 
-Multi-akun: param `accountIds` (dipisah koma) — filter `targets` berdasarkan daftar, bukan hanya satu `accountId`.
+```ts
+async initiateResumableSession(meta: {
+  filename: string;
+  mimeType: string;
+  fileSize: number;
+  parentId?: string;
+}): Promise<string> {
+  const metadata = {
+    name: meta.filename,
+    ...(meta.parentId ? { parents: [meta.parentId] } : {}),
+  };
 
-- [x] **3. UI filter lanjutan**
+  const res = await fetch(`${UPLOAD_BASE}/files?uploadType=resumable`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${this.accessToken}`,
+      'X-Upload-Content-Type': meta.mimeType,
+      'X-Upload-Content-Length': String(meta.fileSize),
+      'Content-Type': 'application/json; charset=UTF-8',
+    },
+    body: JSON.stringify(metadata),
+  });
 
-Di `src/components/files/files-filters.tsx`:
-- Tombol **Filters** → Popover/Dropdown berisi:
-  - **Dari sini / Sampai sini**: `<input type="date">` (konversi ke ISO sebelum kirim).
-  - **Ukuran minimal/maksimal**: Input angka + Select satuan (MB/GB) → dikonversi ke byte.
-  - **Akun**: multi-select checkbox (daftar dari `GET /api/storage`).
-- Tombol **Reset**.
-- Semua nilai masuk ke `queryKey` dan URL (`?sizeMin=&sizeMax=&modifiedAfter=&modifiedBefore=&accountIds=`).
-- State loading/empty/error tetap seperti Sesi 5.
-
-- [x] **4. Preview dialog**
-
-Buat `src/components/files/preview-dialog.tsx`:
-
-```tsx
-'use client';
-
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { DriveFileDto } from '@/lib/google-drive/types';
-
-interface Props {
-  file: DriveFileDto | null;
-  onOpenChange: (open: boolean) => void;
+  if (!res.ok) throw await mapGoogleError(res, this.account);
+  const location = res.headers.get('location');
+  if (!location) throw new AppError('DRIVE_API_ERROR', 'Google tidak mengembalikan upload session URL.', 500);
+  return location;
 }
 
-export function PreviewDialog({ file, onOpenChange }: Props) {
-  const isGoogleNative = file?.mimeType.startsWith('application/vnd.google-apps.') ?? false;
-  const previewUrl = file ? `https://drive.google.com/file/d/${file.id}/preview` : '';
-  const openUrl = file ? `https://drive.google.com/open?id=${file.id}` : '';
+async getResumableOffset(sessionUri: string, fileSize: number): Promise<number> {
+  const res = await fetch(sessionUri, {
+    method: 'PUT',
+    headers: {
+      'Content-Range': `bytes */${fileSize}`,
+    },
+  });
 
-  return (
-    <Dialog open={!!file} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>{file?.name}</DialogTitle>
-        </DialogHeader>
-        {file && (
-          <div className="space-y-3">
-            <iframe
-              src={previewUrl}
-              className="h-[60vh] w-full rounded-md border"
-              title={`Preview ${file.name}`}
-            />
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>{isGoogleNative ? 'Dokumen Google — pratinjau memerlukan login Google di browser.' : 'Pratinjau via Google Drive viewer.'}</span>
-              <a href={openUrl} target="_blank" rel="noreferrer" className="underline">Buka di Drive</a>
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
+  if (res.status === 308) {
+    return parseResumeOffset(res.headers.get('range'));
+  }
+  if (res.status === 200 || res.status === 201) {
+    return fileSize; // sudah selesai
+  }
+  throw await mapGoogleError(res, this.account);
+}
+
+async uploadChunk(params: {
+  sessionUri: string;
+  chunk: ArrayBuffer;
+  startByte: number;
+  totalSize: number;
+}): Promise<{ completed: boolean; file?: DriveFileDto }> {
+  const endByte = params.startByte + params.chunk.byteLength - 1;
+  const contentRange = buildContentRangeHeader(params.startByte, endByte, params.totalSize);
+
+  const res = await fetch(params.sessionUri, {
+    method: 'PUT',
+    headers: {
+      'Content-Length': String(params.chunk.byteLength),
+      'Content-Range': contentRange,
+    },
+    body: params.chunk,
+  });
+
+  if (res.status === 308) {
+    return { completed: false };
+  }
+
+  if (res.status === 200 || res.status === 201) {
+    const body = await res.json();
+    return {
+      completed: true,
+      file: {
+        id: body.id,
+        name: body.name,
+        mimeType: body.mimeType,
+        sizeBytes: body.size ? Number(body.size) : null,
+        modifiedAt: body.modifiedTime ?? null,
+        parentId: body.parents?.[0] ?? null,
+        webViewLink: body.webViewLink ?? null,
+        accountId: this.account.id,
+        accountEmail: this.account.email,
+      },
+    };
+  }
+
+  throw await mapGoogleError(res, this.account);
 }
 ```
 
-Di `FilesTable`: tambahkan aksi **Preview** (ikon `Eye`) → set state `previewFile`; jadikan seluruh baris double-click untuk preview. Untuk tipe yang tidak didukung viewer (mis. `.zip`), tetap tampilkan iframe + fallback "Buka di Drive"/"Download".
+Jalankan `pnpm test src/lib/__tests__/chunked-upload.test.ts` → PASS.
 
-- [x] **5. Pipeline + commit**
+- [ ] **4. API Endpoints untuk sesi chunked upload**
+
+Buat `src/app/api/files/upload/session/route.ts`:
+- Route `POST` dengan `withAuth`: menerima `{ filename, fileSize, contentType, accountId?, folderId?, mode? }`.
+- Resolusi akun: jika `mode === 'auto'`, gunakan `selectAccount` (Sesi 10); jika manual, gunakan `accountId`.
+- Buat record `upload_jobs` dengan status `uploading`.
+- Panggil `service.initiateResumableSession(...)` → dapatkan Google `sessionUri`.
+- Simpan `resumableUri` ke baris `upload_jobs`.
+- Kembalikan `{ jobId, accountId, sessionUri }`.
+
+Buat `src/app/api/files/upload/chunk/route.ts`:
+- Route `PUT` dengan `withAuth`: menerima query param `?jobId=...`.
+- Baca header `Content-Range: bytes start-end/total`.
+- Ambil job dari DB, verifikasi milik user.
+- Baca chunk binary dari `req.arrayBuffer()`.
+- Panggil `service.uploadChunk(...)`.
+- Update `uploadedBytes` pada `upload_jobs`.
+- Jika `completed: true`:
+  - Update `upload_jobs.status = 'completed'`, `completedAt = new Date()`.
+  - Jalankan `syncQuota(account)`.
+  - Tulis ke `activity_logs` (`action: 'file.upload'`).
+- Kembalikan status `{ completed, uploadedBytes: endByte + 1, file }`.
+
+Buat `src/app/api/files/upload/session/[id]/status/route.ts`:
+- Route `GET` dengan `withAuth`: mengembalikan offset terbaru via `service.getResumableOffset(...)`.
+
+- [ ] **5. Client ChunkedUploader & integrasi UploadQueueManager**
+
+Buat `src/lib/upload/chunked-uploader.ts`:
+- Ukuran chunk: 5 MB (`5 * 1024 * 1024` byte, kelipatan 256 KB sesuai spesifikasi Google).
+- Fungsi `uploadFileChunked(item: QueueItem, onProgress: (pct: number) => void)`:
+  - Untuk file kecil (< 10 MB), langsung gunakan endpoint streaming `POST /api/files/upload`.
+  - Untuk file besar (≥ 10 MB):
+    1. Panggil `POST /api/files/upload/session` untuk inisiasi.
+    2. Loop pemotongan file: `file.slice(start, end)`.
+    3. Kirim ke `PUT /api/files/upload/chunk?jobId=...` dengan abort signal.
+    4. Jika request terputus di tengah (mis. network glitch):
+       - Tangani error dengan auto-retry: panggil `GET /api/files/upload/session/[id]/status` untuk mendapatkan byte offset terakhir.
+       - Lanjutkan loop dari byte offset tersebut tanpa mengulang chunk sebelumnya.
+    5. Laporkan persentase `(uploadedBytes / totalSize) * 100` ke callback `onProgress`.
+- Pasang `uploadFileChunked` sebagai default uploader pada `globalUploadQueue` di `src/lib/upload/upload-queue.ts`.
+
+- [ ] **6. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
-git add -A && git commit -m "feat: advanced search filters and file preview"
+git add -A && git commit -m "feat: large file chunked resumable upload and network resilience"
 ```
 
 ### Verifikasi
 
-- [x] `pnpm test` → test query builder lanjutan PASS
-- [x] Filter tanggal (mis. 7 hari terakhir) → hanya file yang dimodifikasi dalam rentang
-- [x] Filter ukuran ≥ 100 MB → hanya file besar; kombinasi ukuran + jenis + search bekerja bersamaan
-- [x] Multi-akun terpilih → hasil hanya dari akun terpilih; hapus centang semua → kembali semua akun
-- [x] Preview gambar/PDF tampil di dialog; tombol "Buka di Drive" berfungsi; Google Doc → preview/ganti tab
-- [x] URL filter bisa di-copy-paste dan mempertahankan state (back/forward browser OK)
-- [x] Pipeline lulus
+- [ ] Unit test `chunk-helpers.test.ts` PASS
+- [ ] Upload file 50 MB+ terkirim dalam beberapa chunk bertahap (progress 10%..30%..100%)
+- [ ] Simulasi interupsi koneksi (abort di 50% lalu resume) mengembalikan offset 50% dan melanjutkan sisa chunk
+- [ ] File yang selesai diunggah dapat diunduh kembali dan memiliki checksum/size identik
+- [ ] Tabel `upload_jobs` mencatat `status = 'completed'` dengan `uploaded_bytes = file_size`
+- [ ] Snapshot storage akun ter-update otomatis pasca upload chunk selesai
+- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [x] Commit terakhir sesi 13
-- [x] Update baris **Sesi 13** di tracker: ✅, tanggal, catatan
-- [x] **Phase 2 selesai** — tambahkan entri di Log Sesi
+- [ ] Commit terakhir sesi 15
+- [ ] Update baris **Sesi 15** di tracker: ✅, tanggal, catatan handoff (chunk size, protokol resume Google)
 
 ---
 
-## 6. Backlog Phase 3
+## Sesi 16 — Multi-Select Table & Bulk Operations (Delete & Move)
 
-Belum didetailkan menjadi sesi (PRD §12 Phase 3). Saat akan dikerjakan, buat sesi baru mengikuti format di dokumen ini dan tambahkan barisnya ke [Tracker](#1-tracker):
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 16 dari implementasi.md. Baca PRD.md §5.5 (Actions), §12 Phase 3 (Bulk delete, Bulk move), lalu Global Constraints + Sesi 16. Kerjakan hanya Sesi 16, verifikasi lulus, commit, update tracker.`
 
-- Multi-file upload (paralel) + upload queue
-- Retry failed upload (dari tabel `upload_jobs` status `failed`)
-- Large file handling tambahan (resumable retry/chunk manual bila diperlukan)
-- Drag & drop upload
-- Bulk delete / bulk move
-- Storage balancing lintas akun
-- Penggantian in-memory rate limit → rate limit berbasis Redis/Postgres bila sudah multi-instance
+**Goal:** Menyediakan mode seleksi multi-item pada `FilesTable` (checkbox baris, select all di halaman, shift-click range), floating bulk action bar, serta eksekusi operasi massal: bulk delete (dengan konfirmasi aman) dan bulk move ke folder tertentu dengan kontrol concurrency pool di server.
+
+**Prasyarat:** Sesi 9 (Move/Delete) & Sesi 13 (FilesTable).
+
+**Consumes:** `FilesTable`, `GoogleDriveService.deleteFile`, `GoogleDriveService.moveFile`, `logActivity`.
+
+**Produces:**
+- Helper batch runner `src/lib/utils/batch.ts` (eksekusi paralel terkontrol dengan concurrency limit 5).
+- Fitur row selection TanStack Table v9 pada `src/components/files/files-table.tsx` (kolom checkbox, header select-all, keyboard shift-click selection).
+- Komponen `src/components/files/bulk-action-bar.tsx` (floating bar di bagian bawah layar saat ≥ 1 file dipilih: count terpilih, tombol `Move (N)`, `Delete (N)`, dan `Deselect All`).
+- API Routes:
+  - `POST /api/files/bulk-delete`: menghapus banyak file lintas/dalam akun dengan concurrency pool, mengembalikan ringkasan status.
+  - `POST /api/files/bulk-move`: memindahkan banyak file ke folder tujuan dengan validasi akun.
+- Dialog konfirmasi `BulkDeleteDialog` & `BulkMoveDialog` dengan visual progress execution.
+- Unit test `src/lib/__tests__/bulk-operations.test.ts`.
+
+### Langkah-langkah
+
+- [ ] **1. Unit test batch runner concurrency pool (merah)**
+
+Buat `src/lib/__tests__/bulk-operations.test.ts`:
+
+```ts
+import { describe, expect, it, vi } from 'vitest';
+import { runBatchPool } from '@/lib/utils/batch';
+
+describe('runBatchPool', () => {
+  it('menjalankan tugas dalam pool concurrency terkontrol', async () => {
+    let running = 0;
+    let maxRunning = 0;
+    const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+    const results = await runBatchPool(items, 3, async (item) => {
+      running++;
+      maxRunning = Math.max(maxRunning, running);
+      await new Promise((r) => setTimeout(r, 20));
+      running--;
+      return item * 2;
+    });
+
+    expect(maxRunning).toBe(3);
+    expect(results.length).toBe(10);
+    expect(results.every((r) => r.success)).toBe(true);
+    expect(results[0]?.result).toBe(2);
+  });
+
+  it('tetap melanjutkan tugas lain bila salah satu item gagal', async () => {
+    const items = ['ok1', 'fail', 'ok2'];
+    const results = await runBatchPool(items, 2, async (item) => {
+      if (item === 'fail') throw new Error('Item error');
+      return item.toUpperCase();
+    });
+
+    expect(results.find((r) => r.item === 'fail')?.success).toBe(false);
+    expect(results.find((r) => r.item === 'ok1')?.success).toBe(true);
+    expect(results.find((r) => r.item === 'ok2')?.success).toBe(true);
+  });
+});
+```
+
+Jalankan `pnpm test src/lib/__tests__/bulk-operations.test.ts` → FAIL.
+
+- [ ] **2. Implementasi batch runner pool**
+
+Buat `src/lib/utils/batch.ts`:
+
+```ts
+export interface BatchResult<T, R> {
+  item: T;
+  success: boolean;
+  result?: R;
+  error?: string;
+}
+
+export async function runBatchPool<T, R>(
+  items: T[],
+  concurrency: number,
+  workerFn: (item: T) => Promise<R>,
+): Promise<Array<BatchResult<T, R>>> {
+  const results: Array<BatchResult<T, R>> = new Array(items.length);
+  let currentIndex = 0;
+
+  async function worker() {
+    while (currentIndex < items.length) {
+      const idx = currentIndex++;
+      const item = items[idx]!;
+      try {
+        const res = await workerFn(item);
+        results[idx] = { item, success: true, result: res };
+      } catch (err: any) {
+        results[idx] = {
+          item,
+          success: false,
+          error: err instanceof Error ? err.message : 'Unknown error',
+        };
+      }
+    }
+  }
+
+  const pool = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(pool);
+  return results;
+}
+```
+
+Jalankan `pnpm test src/lib/__tests__/bulk-operations.test.ts` → PASS.
+
+- [ ] **3. API Endpoints bulk delete & bulk move**
+
+Buat `src/app/api/files/bulk-delete/route.ts`:
+- Route `POST` dengan `withAuth`.
+- Body: `{ items: Array<{ id: string; accountId: string; name?: string }> }`.
+- Validasi: `items` berupa array tidak kosong (maksimal 100 item/request).
+- Ambil semua akun user untuk verifikasi kepemilikan.
+- Eksekusi menggunakan `runBatchPool(items, 5, async ({ id, accountId, name }) => ...)`:
+  - Ambil `service` untuk `accountId`.
+  - Panggil `service.deleteFile(id)`.
+  - Hapus dari cache `drive_files` jika ada.
+  - Catat `logActivity({ action: 'file.delete', fileId: id, metadata: { bulk: true, name } })`.
+- Kembalikan `{ deletedCount, failedCount, errors: [...] }`.
+
+Buat `src/app/api/files/bulk-move/route.ts`:
+- Route `POST` dengan `withAuth`.
+- Body: `{ items: Array<{ id: string; accountId: string; fromFolderId?: string | null }>; targetFolderId: string | null; targetAccountId: string }`.
+- Validasi: semua file dalam `items` harus berasal dari `targetAccountId` (pemindahan folder hanya dalam akun yang sama).
+- Eksekusi menggunakan `runBatchPool` (concurrency 5):
+  - Panggil `service.moveFile(id, fromFolderId ?? null, targetFolderId)`.
+  - Catat `logActivity({ action: 'file.move', fileId: id, metadata: { bulk: true, toFolderId: targetFolderId } })`.
+- Kembalikan `{ movedCount, failedCount, errors: [...] }`.
+
+- [ ] **4. Checkbox selection pada FilesTable & BulkActionBar**
+
+Di `src/components/files/files-table.tsx`:
+- Aktifkan fitur row selection TanStack Table v9:
+  - Tambahkan kolom pertama: checkbox Base UI.
+  - Header kolom: Checkbox select all (memilih seluruh baris yang sedang tampil di halaman).
+  - Shift-click selection: simpan index baris terakhir yang diklik; jika Shift ditekan, pilih rentang baris di antaranya.
+  - Hitung `selectedFiles = table.getSelectedRowModel().rows.map(r => r.original)`.
+
+Buat `src/components/files/bulk-action-bar.tsx`:
+- Render fixed bar di bagian bawah tengah layar saat `selectedFiles.length > 0`:
+  `fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2 bg-card border rounded-full shadow-2xl animate-in slide-in-from-bottom-4`.
+- Menampilkan:
+  - Badge jumlah: `{selectedCount} item terpilih`.
+  - Tombol **Move** (`FolderInput` icon) → buka `BulkMoveDialog`.
+  - Tombol **Delete** (`Trash2` icon, destructive variant) → buka `BulkDeleteDialog`.
+  - Tombol **Batal** (`X` icon) → bersihkan state seleksi.
+
+- [ ] **5. Dialog BulkDeleteDialog & BulkMoveDialog**
+
+Buat `src/components/files/bulk-delete-dialog.tsx`:
+- AlertDialog konfirmasi: "Apakah Anda yakin ingin menghapus {N} item terpilih? Aksi ini akan memindahkan item ke sampah Google Drive."
+- List scrollable berisi daftar nama file terpilih.
+- Tombol "Hapus Permanen" memicu mutation `POST /api/files/bulk-delete`.
+- Tampilkan progress bar saat penghapusan berlangsung. Setelah selesai, tampilkan toast ringkasan, bersihkan seleksi, dan invalidasi `['files']` & `['storage']`.
+
+Buat `src/components/files/bulk-move-dialog.tsx`:
+- Dialog pemilihan folder tujuan: jika file berasal dari multi-akun, tampilkan peringatan bahwa pemindahan bulk hanya dapat dilakukan untuk file dalam akun yang sama (atau kelompokkan per akun).
+- Folder picker dropdown (daftar folder dari akun terkait).
+- Tombol "Pindahkan" memanggil `POST /api/files/bulk-move`.
+
+- [ ] **6. Pipeline + commit**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+git add -A && git commit -m "feat: multi-select table and bulk delete and move operations"
+```
+
+### Verifikasi
+
+- [ ] Unit test `bulk-operations.test.ts` PASS
+- [ ] Checkbox per baris memilih/melepas seleksi; select-all di header memilih semua item halaman
+- [ ] Shift-click memilih rentang file berurutan secara instan
+- [ ] Floating Bulk Action Bar muncul saat 1+ item terpilih dan hilang saat dibatalkan
+- [ ] Bulk delete 5 file: dialog konfirmasi tampil, proses progress berjalan, seluruh file terhapus dari UI & Drive
+- [ ] Bulk move 5 file ke folder tujuan memindahkan seluruh file ke folder target
+- [ ] Error isolation: jika 1 file gagal dihapus (mis. permission), file lain tetap terhapus dan error dilaporkan di toast
+- [ ] Activity log mencatat entri per file yang dihapus/dipindahkan
+- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+
+### Handoff
+
+- [ ] Commit terakhir sesi 16
+- [ ] Update baris **Sesi 16** di tracker: ✅, tanggal, catatan handoff (bulk batch concurrency limit)
+
+---
+
+## Sesi 17 — Storage Balancing Engine & Cross-Account File Migration
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 17 dari implementasi.md. Baca PRD.md §3.1, §6.3, §12 Phase 3 (Storage balancing, File migration lintas akun), lalu Global Constraints + Sesi 17. Kerjakan hanya Sesi 17, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Menyediakan analisis keseimbangan storage lintas akun (skor ketimpangan / imbalance index), algoritma rekomendasi pemindahan file dari akun yang hampir penuh ke akun yang masih lapang, serta fitur migrasi file lintas akun menggunakan piped streaming (stream download dari Akun A langsung di-pipe ke upload session Akun B tanpa membebani disk VPS) dengan opsi penghapusan file asli setelah sukses.
+
+**Prasyarat:** Sesi 10 (Quota selection), Sesi 11 (Stats), Sesi 12 (Sync worker & file indexing).
+
+**Consumes:** `GoogleDriveService.downloadFile`, `GoogleDriveService.uploadFile` / chunked upload, tabel `google_accounts`, `storage_snapshots`, `drive_files`, `logActivity`.
+
+**Produces:**
+- `src/lib/storage/balancing.ts` (algoritma analisis ketimpangan kapasitas dan engine rekomendasi pemindahan file).
+- `src/lib/google-drive/migration.ts` (service migrasi streaming in-flight antar dua akun Google).
+- API Routes:
+  - `GET /api/storage/balancing`: mengembalikan status skor keseimbangan dan daftar rekomendasi pemindahan file.
+  - `POST /api/files/migrate`: mengeksekusi transfer file streaming dari akun asal ke akun tujuan.
+- UI:
+  - `src/components/stats/storage-balancing-card.tsx` (kartu analisis ketimpangan & rekomendasi di halaman Stats / Dashboard).
+  - `src/components/files/migrate-file-dialog.tsx` (dialog migrasi file dengan pilihan akun tujuan dan estimasi sisa ruang).
+  - Aksi "Migrate to another account" pada dropdown file di `FilesTable`.
+- Unit test `src/lib/__tests__/storage-balancing.test.ts`.
+
+### Langkah-langkah
+
+- [ ] **1. Unit test algoritma storage balancing & rekomendasi (merah)**
+
+Buat `src/lib/__tests__/storage-balancing.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { calculateStorageImbalance, getBalancingRecommendations } from '@/lib/storage/balancing';
+
+describe('Storage Balancing Engine', () => {
+  it('menghitung skor ketimpangan penyimpanan dengan benar', () => {
+    // 2 akun seimbang (keduanya 50% used)
+    const balancedAccounts = [
+      { id: '1', email: 'a@gmail.com', usedBytes: 50, totalBytes: 100 },
+      { id: '2', email: 'b@gmail.com', usedBytes: 50, totalBytes: 100 },
+    ];
+    const resBalanced = calculateStorageImbalance(balancedAccounts);
+    expect(resBalanced.imbalanceRatio).toBe(0);
+    expect(resBalanced.isImbalanced).toBe(false);
+
+    // 2 akun timpang (akun 1 = 90%, akun 2 = 10%)
+    const imbalancedAccounts = [
+      { id: '1', email: 'a@gmail.com', usedBytes: 90, totalBytes: 100 },
+      { id: '2', email: 'b@gmail.com', usedBytes: 10, totalBytes: 100 },
+    ];
+    const resImbalanced = calculateStorageImbalance(imbalancedAccounts);
+    expect(resImbalanced.imbalanceRatio).toBeGreaterThan(0.3);
+    expect(resImbalanced.isImbalanced).toBe(true);
+  });
+
+  it('memberikan rekomendasi file besar dari akun penuh ke akun lapang', () => {
+    const accounts = [
+      { id: 'full', email: 'full@gmail.com', usedBytes: 14 * 1024 ** 3, totalBytes: 15 * 1024 ** 3 }, // 93%
+      { id: 'empty', email: 'empty@gmail.com', usedBytes: 2 * 1024 ** 3, totalBytes: 15 * 1024 ** 3 }, // 13%
+    ];
+
+    const files = [
+      { id: 'f1', name: 'large.zip', sizeBytes: 4 * 1024 ** 3, googleAccountId: 'full' },
+      { id: 'f2', name: 'small.txt', sizeBytes: 1024, googleAccountId: 'full' },
+    ];
+
+    const recs = getBalancingRecommendations(accounts, files);
+    expect(recs.length).toBeGreaterThan(0);
+    expect(recs[0]?.fileId).toBe('f1');
+    expect(recs[0]?.sourceAccountId).toBe('full');
+    expect(recs[0]?.targetAccountId).toBe('empty');
+  });
+});
+```
+
+Jalankan `pnpm test src/lib/__tests__/storage-balancing.test.ts` → FAIL.
+
+- [ ] **2. Implementasi storage balancing engine**
+
+Buat `src/lib/storage/balancing.ts`:
+
+```ts
+export interface StorageAccountSummary {
+  id: string;
+  email: string;
+  usedBytes: number;
+  totalBytes: number | null;
+}
+
+export interface DriveFileSummary {
+  id: string;
+  name: string;
+  sizeBytes: number | null;
+  googleAccountId: string;
+}
+
+export interface BalancingRecommendation {
+  fileId: string;
+  fileName: string;
+  fileSizeBytes: number;
+  sourceAccountId: string;
+  sourceAccountEmail: string;
+  targetAccountId: string;
+  targetAccountEmail: string;
+  impactDescription: string;
+}
+
+export function calculateStorageImbalance(accounts: StorageAccountSummary[]): {
+  imbalanceRatio: number;
+  isImbalanced: boolean;
+  averageUsageRatio: number;
+} {
+  const validAccounts = accounts.filter((a) => a.totalBytes != null && a.totalBytes > 0);
+  if (validAccounts.length <= 1) {
+    return { imbalanceRatio: 0, isImbalanced: false, averageUsageRatio: 0 };
+  }
+
+  const ratios = validAccounts.map((a) => a.usedBytes / a.totalBytes!);
+  const avg = ratios.reduce((sum, r) => sum + r, 0) / ratios.length;
+
+  // Standar deviasi rasio utilisasi
+  const variance = ratios.reduce((sum, r) => sum + Math.pow(r - avg, 2), 0) / ratios.length;
+  const stdDev = Math.sqrt(variance);
+
+  // Dikatakan timpang bila selisih akun terpadat dan terkosong > 40% atau stdDev > 0.25
+  const maxRatio = Math.max(...ratios);
+  const minRatio = Math.min(...ratios);
+  const isImbalanced = maxRatio - minRatio > 0.4 || stdDev > 0.25;
+
+  return {
+    imbalanceRatio: stdDev,
+    isImbalanced,
+    averageUsageRatio: avg,
+  };
+}
+
+export function getBalancingRecommendations(
+  accounts: StorageAccountSummary[],
+  candidateFiles: DriveFileSummary[],
+): BalancingRecommendation[] {
+  const { isImbalanced } = calculateStorageImbalance(accounts);
+  if (!isImbalanced) return [];
+
+  // Urutkan akun dari yang paling padat (% used tertinggi) ke paling longgar
+  const sorted = [...accounts]
+    .filter((a) => a.totalBytes != null && a.totalBytes > 0)
+    .map((a) => ({
+      ...a,
+      ratio: a.usedBytes / a.totalBytes!,
+      freeBytes: Math.max(a.totalBytes! - a.usedBytes, 0),
+    }))
+    .sort((a, b) => b.ratio - a.ratio);
+
+  const fullAccount = sorted[0];
+  const emptyAccount = sorted[sorted.length - 1];
+
+  if (!fullAccount || !emptyAccount || fullAccount.id === emptyAccount.id) return [];
+  if (fullAccount.ratio < 0.75) return []; // belum perlu rebalance bila akun terpadat masih < 75%
+
+  // Cari file berukuran signifikan (misal > 50 MB) di akun terpadat yang muat di akun terlonggar
+  const filesOnFullAccount = candidateFiles
+    .filter((f) => f.googleAccountId === fullAccount.id && f.sizeBytes != null && f.sizeBytes > 50 * 1024 * 1024)
+    .sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0));
+
+  const recommendations: BalancingRecommendation[] = [];
+
+  for (const file of filesOnFullAccount) {
+    if (file.sizeBytes! < emptyAccount.freeBytes) {
+      recommendations.push({
+        fileId: file.id,
+        fileName: file.name,
+        fileSizeBytes: file.sizeBytes!,
+        sourceAccountId: fullAccount.id,
+        sourceAccountEmail: fullAccount.email,
+        targetAccountId: emptyAccount.id,
+        targetAccountEmail: emptyAccount.email,
+        impactDescription: `Memindahkan file ini akan menurunkan pemakaian ${fullAccount.email} dan menyeimbangkan kuota ke ${emptyAccount.email}.`,
+      });
+      if (recommendations.length >= 5) break; // Maksimal 5 saran teratas
+    }
+  }
+
+  return recommendations;
+}
+```
+
+Jalankan `pnpm test src/lib/__tests__/storage-balancing.test.ts` → PASS.
+
+- [ ] **3. Service streaming migration antar akun**
+
+Buat `src/lib/google-drive/migration.ts`:
+
+```ts
+import type { GoogleAccount } from '@/db/schema';
+import { GoogleDriveService } from './service';
+import { AppError } from '@/lib/errors';
+import { logActivity } from '@/lib/activity';
+import { syncQuota } from '@/lib/quota';
+
+export async function migrateFileAcrossAccounts(options: {
+  userId: string;
+  fileId: string;
+  sourceAccount: GoogleAccount;
+  targetAccount: GoogleAccount;
+  deleteSourceAfter?: boolean;
+}): Promise<{ targetFileId: string; targetFileName: string }> {
+  const sourceService = await GoogleDriveService.forAccount(options.sourceAccount);
+  const targetService = await GoogleDriveService.forAccount(options.targetAccount);
+
+  // 1. Ambil metadata file sumber
+  const sourceFile = await sourceService.getFile(options.fileId);
+  if (!sourceFile) throw new AppError('NOT_FOUND', 'File sumber tidak ditemukan di Google Drive.', 404);
+
+  // 2. Download stream dari akun sumber
+  const downloadRes = await sourceService.downloadFile(options.fileId, sourceFile.mimeType);
+  if (!downloadRes.body) throw new AppError('DRIVE_API_ERROR', 'Gagal membuka readable stream file sumber.', 500);
+
+  // 3. Pipe stream langsung ke upload akun tujuan (in-flight tanpa buffer file di disk)
+  const uploaded = await targetService.uploadFile({
+    stream: downloadRes.body,
+    contentLength: sourceFile.sizeBytes ?? 0,
+    contentType: sourceFile.mimeType,
+    filename: sourceFile.name,
+  });
+
+  // 4. Jika diminta, hapus file sumber setelah upload terverifikasi
+  if (options.deleteSourceAfter) {
+    await sourceService.deleteFile(options.fileId);
+  }
+
+  // 5. Sync kuota kedua akun
+  await Promise.all([syncQuota(options.sourceAccount), syncQuota(options.targetAccount)]);
+
+  // 6. Catat aktivitas
+  await logActivity({
+    userId: options.userId,
+    googleAccountId: options.targetAccount.id,
+    action: 'file.copy',
+    fileId: uploaded.id,
+    metadata: {
+      migration: true,
+      sourceAccountId: options.sourceAccount.id,
+      sourceFileId: options.fileId,
+      deleteSourceAfter: !!options.deleteSourceAfter,
+    },
+  });
+
+  return { targetFileId: uploaded.id, targetFileName: uploaded.name };
+}
+```
+
+- [ ] **4. API Endpoints balancing & migration**
+
+Buat `src/app/api/storage/balancing/route.ts`:
+- Route `GET` dengan `withAuth`.
+- Ambil semua akun user + snapshot terbaru.
+- Ambil file-file besar dari tabel `drive_files`.
+- Hitung status ketimpangan dan daftar rekomendasi via `getBalancingRecommendations`.
+- Kembalikan `{ imbalanceRatio, isImbalanced, recommendations }`.
+
+Buat `src/app/api/files/migrate/route.ts`:
+- Route `POST` dengan `withAuth`.
+- Body: `{ fileId, sourceAccountId, targetAccountId, deleteSourceAfter?: boolean }`.
+- Verifikasi user adalah pemilik sah `sourceAccountId` dan `targetAccountId`.
+- Jalankan `migrateFileAcrossAccounts(...)`.
+- Kembalikan `{ success: true, targetFileId, targetFileName }`.
+
+- [ ] **5. Komponen UI BalancingCard & MigrateFileDialog**
+
+Buat `src/components/stats/storage-balancing-card.tsx`:
+- Tampilkan card "Storage Balancing & Optimasi" di `/dashboard/stats` dan tab Accounts:
+  - Skor kesehatan distribusi storage: Badge hijau "Seimbang" atau kuning "Perlu Rebalance".
+  - Daftar rekomendasi kartu saran: "File video_project.mp4 (4.2 GB) pada akun A → Pindahkan ke Akun B".
+  - Tombol "Migrate Now" pada tiap rekomendasi yang membuka `MigrateFileDialog` secara otomatis terisi.
+
+Buat `src/components/files/migrate-file-dialog.tsx`:
+- Pilihan target akun tujuan dari daftar akun user.
+- Checkbox "Hapus file sumber setelah migrasi selesai (Bebaskan ruang di akun asal)".
+- Info estimasi kapasitas sebelum dan sesudah transfer.
+- Progress loading indikator saat transfer streaming berlangsung.
+
+Tambahkan aksi "Migrate to another account" pada dropdown baris di `src/components/files/file-actions.tsx`.
+
+- [ ] **6. Pipeline + commit**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+git add -A && git commit -m "feat: storage balancing engine and cross-account file migration"
+```
+
+### Verifikasi
+
+- [ ] Unit test `storage-balancing.test.ts` PASS
+- [ ] Endpoint `GET /api/storage/balancing` mengembalikan skor ketimpangan dan rekomendasi yang masuk akal
+- [ ] Kartu Storage Balancing muncul di `/dashboard/stats` dengan rekomendasi terstruktur
+- [ ] Migrasi file 20 MB dari Akun A ke Akun B via dialog:
+  - File berhasil disalin ke Akun B dengan nama dan isi yang sama persis
+  - File di Akun A terhapus jika checkbox dicentang (atau tetap ada jika tidak dicentang)
+  - Kuota snapshot kedua akun ter-refresh dan berubah proporsional
+- [ ] Transfer dilakukan streaming in-flight (RAM/disk server tidak membengkak)
+- [ ] Activity log mencatat entri migrasi dengan metadata lengkap
+- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+
+### Handoff
+
+- [ ] Commit terakhir sesi 17
+- [ ] Update baris **Sesi 17** di tracker: ✅, tanggal, catatan handoff (in-flight stream migration, balancing index)
+
+---
+
+## Sesi 18 — Distributed Rate Limiter & Production Hardening (Phase 3 Acceptance)
+
+> **Prompt sesi baru:** `Kamu mengerjakan Sesi 18 dari implementasi.md. Baca PRD.md §9 (Security, Rate Limiting), §10 (Reliability), §12 Phase 3 (Hardening & Acceptance), lalu Global Constraints + Sesi 18. Kerjakan hanya Sesi 18, verifikasi lulus, commit, update tracker.`
+
+**Goal:** Production Hardening & Phase 3 Acceptance: mengganti in-memory rate limiter dengan distributed sliding window berbasis PostgreSQL (atau Redis jika tersedia via `REDIS_URL`) agar rate limit konsisten pada multiple proses/VPS, menambahkan sistem worker heartbeat & health monitoring di dashboard, audit keamanan & reliabilitas, serta verifikasi menyeluruh Acceptance Criteria Phase 3.
+
+**Prasyarat:** Sesi 14–17.
+
+**Consumes:** Seluruh API routes, worker service, PRD §9 & §12.
+
+**Produces:**
+- Skema database:
+  - `src/db/schema/rate-limits.ts`: tabel `rate_limits` (`key`, `timestamp`) dengan index pada `(key, timestamp)`.
+  - `src/db/schema/worker-status.ts`: tabel `worker_status` (`serviceName`, `lastHeartbeat`, `meta`).
+- `src/lib/rate-limit/distributed.ts` (sliding window rate limiter PostgreSQL dengan fallback in-memory dan adapter Redis).
+- Worker heartbeat: loop worker di `src/worker/index.ts` memperbarui heartbeat berkala; endpoint `GET /api/worker/health` mengembalikan status runner.
+- UI: `WorkerStatusBadge` di header / accounts (🟢 Active / 🟡 Stale / 🔴 Stopped).
+- Acceptance run-through Phase 3 & dokumentasi `README.md`.
+- Unit test `src/lib/__tests__/distributed-rate-limit.test.ts`.
+
+### Langkah-langkah
+
+- [ ] **1. Skema Drizzle rate_limits dan worker_status**
+
+Buat `src/db/schema/rate-limits.ts`:
+
+```ts
+import { index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
+export const rateLimits = pgTable(
+  'rate_limits',
+  {
+    key: text('key').notNull(),
+    timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    keyTimeIdx: index('rate_limits_key_time_idx').on(table.key, table.timestamp),
+  }),
+);
+```
+
+Buat `src/db/schema/worker-status.ts`:
+
+```ts
+import { jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
+export const workerStatus = pgTable('worker_status', {
+  serviceName: text('service_name').primaryKey(),
+  lastHeartbeat: timestamp('last_heartbeat', { withTimezone: true }).notNull().defaultNow(),
+  metadata: jsonb('metadata'),
+});
+```
+
+Export di `src/db/schema/index.ts`, lalu generate & push migrasi:
+```bash
+pnpm drizzle-kit generate
+pnpm drizzle-kit push
+```
+
+- [ ] **2. Unit test distributed rate limiter (merah)**
+
+Buat `src/lib/__tests__/distributed-rate-limit.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { slidingWindowCheck } from '@/lib/rate-limit/sliding-window';
+
+describe('Sliding Window Rate Limiter', () => {
+  it('mengizinkan request dalam batas limit', () => {
+    const timestamps = [1000, 2000];
+    const res = slidingWindowCheck({
+      timestamps,
+      limit: 3,
+      windowMs: 5000,
+      now: 3000,
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it('menolak request yang melampaui batas kuota', () => {
+    const timestamps = [1000, 2000, 3000];
+    const res = slidingWindowCheck({
+      timestamps,
+      limit: 3,
+      windowMs: 5000,
+      now: 3500,
+    });
+    expect(res.ok).toBe(false);
+    expect(res.retryAfterMs).toBeGreaterThan(0);
+  });
+
+  it('membuang request lama di luar window', () => {
+    const timestamps = [500, 1000, 2000];
+    const res = slidingWindowCheck({
+      timestamps,
+      limit: 3,
+      windowMs: 2000,
+      now: 3000, // timestamps 500 sudah expired
+    });
+    expect(res.ok).toBe(true);
+  });
+});
+```
+
+Jalankan `pnpm test src/lib/__tests__/distributed-rate-limit.test.ts` → FAIL.
+
+- [ ] **3. Implementasi distributed rate limiter**
+
+Buat `src/lib/rate-limit/sliding-window.ts`:
+
+```ts
+export function slidingWindowCheck(params: {
+  timestamps: number[];
+  limit: number;
+  windowMs: number;
+  now: number;
+}): { ok: boolean; retryAfterMs: number } {
+  const validHits = params.timestamps.filter((t) => params.now - t < params.windowMs);
+  if (validHits.length >= params.limit) {
+    const oldestHit = validHits[0]!;
+    const retryAfterMs = params.windowMs - (params.now - oldestHit);
+    return { ok: false, retryAfterMs: Math.max(retryAfterMs, 1000) };
+  }
+  return { ok: true, retryAfterMs: 0 };
+}
+```
+
+Buat `src/lib/rate-limit/distributed.ts`:
+
+```ts
+import { and, eq, gte, lt } from 'drizzle-orm';
+import { db } from '@/db';
+import { rateLimits } from '@/db/schema';
+import { slidingWindowCheck } from './sliding-window';
+
+export async function checkDistributedRateLimit(
+  key: string,
+  limit: number,
+  windowMs: number,
+): Promise<{ ok: boolean; retryAfterMs: number }> {
+  const now = Date.now();
+  const windowStart = new Date(now - windowMs);
+
+  try {
+    // Ambil log hit dalam window saat ini
+    const hits = await db
+      .select({ timestamp: rateLimits.timestamp })
+      .from(rateLimits)
+      .where(and(eq(rateLimits.key, key), gte(rateLimits.timestamp, windowStart)));
+
+    const timestamps = hits.map((h) => h.timestamp.getTime());
+    const result = slidingWindowCheck({ timestamps, limit, windowMs, now });
+
+    if (result.ok) {
+      // Catat hit baru
+      await db.insert(rateLimits).values({ key, timestamp: new Date(now) });
+    }
+
+    // Bersihkan record lama (probabilistik 1:50)
+    if (Math.random() < 0.02) {
+      await db.delete(rateLimits).where(lt(rateLimits.timestamp, new Date(now - windowMs * 2)));
+    }
+
+    return result;
+  } catch (err) {
+    console.warn('[rate-limit] database rate limit check failed, fallback to allow', err);
+    return { ok: true, retryAfterMs: 0 };
+  }
+}
+```
+
+Perbarui seluruh pemanggilan rate limiting di API routes (`upload`, `auth`, `mutations`) agar menggunakan `checkDistributedRateLimit`.
+
+Jalankan `pnpm test src/lib/__tests__/distributed-rate-limit.test.ts` → PASS.
+
+- [ ] **4. Worker Heartbeat & API Worker Health**
+
+Di `src/worker/index.ts`:
+- Tambahkan interval heartbeat setiap 30 detik:
+  ```ts
+  async function recordHeartbeat() {
+    await db
+      .insert(workerStatus)
+      .values({
+        serviceName: 'background-worker',
+        lastHeartbeat: new Date(),
+        metadata: { uptimeSeconds: Math.floor(process.uptime()), memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024) },
+      })
+      .onConflictDoUpdate({
+        target: workerStatus.serviceName,
+        set: { lastHeartbeat: new Date(), metadata: { uptimeSeconds: Math.floor(process.uptime()) } },
+      });
+  }
+  ```
+
+Buat `src/app/api/worker/health/route.ts`:
+- Route `GET` dengan `withAuth`.
+- Cek baris `service_name = 'background-worker'`.
+- Status:
+  - `active` jika `now - lastHeartbeat <= 90 detik`.
+  - `stale` jika `90 detik < diff <= 5 menit`.
+  - `stopped` jika `> 5 menit` atau record belum ada.
+- Kembalikan `{ status, lastHeartbeat, metadata }`.
+
+- [ ] **5. Komponen UI WorkerStatusBadge**
+
+Buat `src/components/layout/worker-status-badge.tsx`:
+- Render badge indikator:
+  - 🟢 `Sync Worker Active` (variant secondary)
+  - 🟡 `Sync Worker Stale` (variant warning)
+  - 🔴 `Sync Worker Offline` (variant destructive)
+- Pasang di header atau tab Accounts dengan tooltip detail last heartbeat.
+
+- [ ] **6. Acceptance Run-Through Phase 3 & Update README**
+
+Verifikasi menyeluruh fitur Phase 3:
+1. Multi-file upload queue: antrean 5 file berjalan dengan concurrency 2, retry failed items berfungsi.
+2. Drag and drop: dropzone modal dan global dropzone di halaman files responsif.
+3. Resumable large file upload: upload chunked 50 MB+ dengan resume offset terbukti tangguh.
+4. Bulk operations: selection multi-baris tabel, bulk move dan bulk delete tereksekusi aman dengan activity log.
+5. Storage balancing & migration: deteksi ketimpangan kuota akun dan migrasi streaming file antar akun berjalan lancar.
+6. Distributed rate limiting & worker heartbeat: rate limiting konsisten antar multi-proses, status worker terpantau real-time.
+
+Perbarui `README.md` dengan status fitur Phase 3, arsitektur upload queue, konfigurasi worker, dan panduan migrasi.
+
+- [ ] **7. Pipeline + commit final**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+git add -A && git commit -m "feat: distributed rate limiter, worker heartbeat monitoring, and phase 3 acceptance"
+```
+
+### Verifikasi
+
+- [ ] Seluruh unit test suite lulus (`pnpm test`)
+- [ ] Rate limiter terbukti efektif membatasi akses pada dua proses/curl terpisah secara bersamaan
+- [ ] Worker heartbeat ter-update berkala di tabel `worker_status`
+- [ ] Matikan worker sejenak → badge UI berubah menjadi "Sync Worker Offline" dalam kurun waktu 90 detik; hidupkan kembali → kembali hijau "Active"
+- [ ] Seluruh Acceptance Criteria Phase 3 terpenuhi
+- [ ] `README.md` memuat dokumentasi terkini seluruh fitur Phase 1, Phase 2, dan Phase 3
+- [ ] Seluruh pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+
+### Handoff
+
+- [ ] Commit terakhir sesi 18
+- [ ] Update baris **Sesi 18** di tracker: ✅, tanggal, catatan (Phase 3 Selesai)
 
 ---
 
@@ -3821,6 +4315,21 @@ Belum didetailkan menjadi sesi (PRD §12 Phase 3). Saat akan dikerjakan, buat se
 | — | Search lintas akun | 5 + 7 | header search → Files |
 | — | Create folder | 6 | folder muncul di Drive |
 | — | Rate limit | 6 + 8 | 429 pada request ke-11 |
+| — | Move, Rename, Copy file | 9 | dialog aksi baris + update di Drive web |
+| — | Automatic account selection | 10 | mode auto upload ke akun terbesar |
+| — | Activity log page + Statistik | 11 | halaman Activity & Charts storage/files |
+| — | Background sync worker | 12 | loop worker sync quota & indexing file |
+| — | Advanced search & preview | 13 | popover filter ukuran/tanggal + modal iframe preview |
+| — | Multi-file concurrent upload queue | 14 | antrean klien, 2 upload simultan, drawer Google Drive style |
+| — | Retry failed upload | 14 | tombol retry per-file/all failed mengulang upload tanpa re-pick |
+| — | Drag & drop upload | 14 | dropzone interaktif pada modal dan overlay global di Files |
+| — | Large file chunked resumable upload | 15 | upload file besar ter-chunk dengan resume offset (`Content-Range`) |
+| — | Multi-select file table | 16 | checkbox per baris, select-all, shift-click range selection |
+| — | Bulk delete & Bulk move | 16 | floating action bar, batch runner di server dengan activity log |
+| — | Storage balancing recommendation | 17 | algoritma rekomendasi rebalance akun over-utilized ke under-utilized |
+| — | Cross-account file migration | 17 | streaming transfer in-flight antar 2 akun Google tanpa beban disk lokal |
+| — | Distributed rate limiting | 18 | sliding window rate limiter di PostgreSQL (multi-instance/VPS) |
+| — | Worker heartbeat monitoring | 18 | status runner aktif/stale di UI dan endpoint health |
 
 ---
 
@@ -3838,19 +4347,13 @@ Belum didetailkan menjadi sesi (PRD §12 Phase 3). Saat akan dikerjakan, buat se
 | 8 | Endpoint tambahan di luar PRD §8.4: `POST /api/accounts/refresh`, `GET /api/accounts/[id]/storage`, `POST /api/files/[id]/copy`, `GET/POST /api/folders`, `GET /api/activity`, `GET /api/stats` | Dibutuhkan oleh aksi UI (Refresh, riwayat chart, statistik) tanpa mengubah endpoint yang sudah didefinisikan PRD |
 | 9 | Proteksi route memakai guard server (`dashboard/layout.tsx`) + `withAuth` per API, bukan middleware | Hindari dependensi penamaan middleware antar versi Next.js; cakupan tetap menyeluruh |
 | 10 | Pengujian: Vitest unit + verifikasi manual (tanpa E2E di MVP) | Dioptimalkan untuk kecepatan sesi; dicatat sebagai risiko; acceptance run-through Sesi 8 menjadi gerbang terakhir |
+| 11 | Concurrency limit antrean upload dibatasi 2–3 paralel (Sesi 14) | Mencegah saturasi bandwidth jaringan user dan meminimalisir risiko rate limit 429 dari Google Drive API |
+| 12 | Chunked upload menggunakan protokol native Resumable Google Drive (Sesi 15) | Mengikuti PRD §6.2 tanpa file splitting buatan di server, mendukung resume byte offset saat koneksi terputus |
+| 13 | Concurrency worker pool (5 worker) untuk operasi bulk delete/move (Sesi 16) | Menyeimbangkan kecepatan eksekusi dengan keandalan Google API, menghindari flood HTTP request massal |
+| 14 | Migrasi file lintas akun menggunakan piped in-flight stream (Sesi 17) | Mengalirkan ReadableStream download ke upload session Google Drive tanpa menyimpan file sementara di disk VPS |
+| 15 | Distributed rate limit berbasis PostgreSQL sliding window (Sesi 18) | Memberikan konsistensi pembatasan request antar multiple instance Next.js tanpa mewajibkan dependensi Redis baru |
 
 **Risiko yang diketahui:**
 - App Google OAuth berstatus Testing → refresh token kadaluarsa 7 hari (mitigasi: badge Reconnect + Sesi 3 catatan publish Production).
 - Tanpa E2E otomatis → regresi UI bergantung pada checklist verifikasi manual tiap sesi.
-- Rate limit in-memory → tidak efektif jika aplikasi dijalankan >1 proses (ditingkatkan di Phase 3/Redis).
-
-
-
-
-
-
-
-
-
-
-
+- Rate limit in-memory → ditingkatkan menjadi distributed rate limit berbasis DB di Sesi 18.

@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { FilesDropOverlay } from '@/components/files/files-drop-overlay';
 import { FilesTable } from '@/components/files/files-table';
 import { FILE_KINDS } from '@/lib/files/mime';
 import type { SortKey } from '@/lib/files/merge';
@@ -47,16 +48,18 @@ export default async function FilesPage({ searchParams }: FilesPageProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Files</h1>
-        <p className="text-sm text-muted-foreground">
-          Jelajahi file dari seluruh akun Google Drive.
-        </p>
+    <FilesDropOverlay activeAccountId={initial.accountId !== 'all' ? initial.accountId : undefined}>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Files</h1>
+          <p className="text-sm text-muted-foreground">
+            Jelajahi file dari seluruh akun Google Drive.
+          </p>
+        </div>
+        <Suspense fallback={null}>
+          <FilesTable initial={initial} />
+        </Suspense>
       </div>
-      <Suspense fallback={null}>
-        <FilesTable initial={initial} />
-      </Suspense>
-    </div>
+    </FilesDropOverlay>
   );
 }

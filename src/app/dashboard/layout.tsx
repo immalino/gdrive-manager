@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Header } from '@/components/layout/header';
 import { Sidebar } from '@/components/layout/sidebar';
+import { UploadQueueDrawer } from '@/components/upload/upload-queue-drawer';
 import { getUser } from '@/lib/auth-session';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +15,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <Header user={{ name: user.name, email: user.email }} />
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
+      <UploadQueueDrawer />
     </div>
   );
 }
