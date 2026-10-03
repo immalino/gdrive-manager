@@ -71,6 +71,7 @@ export function FileActions({ file }: { file: DriveFileDto }) {
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyName, setCopyName] = useState(file.name);
   const [copyTargetFolderId, setCopyTargetFolderId] = useState(file.parentId ?? 'root');
+  const [folderFilter, setFolderFilter] = useState('');
 
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -83,16 +84,19 @@ export function FileActions({ file }: { file: DriveFileDto }) {
   });
 
   const availableFolders = useMemo(() => {
-    return (foldersData?.folders ?? []).filter((f) => f.id !== file.id);
-  }, [foldersData, file.id]);
+    const list = (foldersData?.folders ?? []).filter((f) => f.id !== file.id);
+    if (!folderFilter.trim()) return list;
+    const q = folderFilter.toLowerCase();
+    return list.filter((f) => f.name.toLowerCase().includes(q));
+  }, [foldersData, file.id, folderFilter]);
 
   const folderSelectItems = useMemo(() => {
     const map: Record<string, string> = { root: 'Root (My Drive)' };
-    for (const f of availableFolders) {
+    for (const f of foldersData?.folders ?? []) {
       map[f.id] = f.name;
     }
     return map;
-  }, [availableFolders]);
+  }, [foldersData]);
 
   // Mutations
   const renameMutation = useMutation({
@@ -310,7 +314,13 @@ export function FileActions({ file }: { file: DriveFileDto }) {
       </Dialog>
 
       {/* Move Dialog */}
-      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
+      <Dialog
+        open={moveOpen}
+        onOpenChange={(next) => {
+          setMoveOpen(next);
+          if (!next) setFolderFilter('');
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Move {isFolder ? 'Folder' : 'File'}</DialogTitle>
@@ -322,28 +332,41 @@ export function FileActions({ file }: { file: DriveFileDto }) {
               {foldersLoading ? (
                 <p className="text-sm text-muted-foreground">Memuat daftar folder...</p>
               ) : (
-                <Select
-                  value={targetFolderId}
-                  onValueChange={(val) => setTargetFolderId(String(val))}
-                  items={folderSelectItems}
-                >
-                  <SelectTrigger className="w-full" aria-label="Pilih folder tujuan">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="root">Root (My Drive)</SelectItem>
-                    {availableFolders.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Filter nama folder..."
+                    value={folderFilter}
+                    onChange={(e) => setFolderFilter(e.target.value)}
+                  />
+                  <Select
+                    value={targetFolderId}
+                    onValueChange={(val) => setTargetFolderId(String(val))}
+                    items={folderSelectItems}
+                  >
+                    <SelectTrigger className="w-full" aria-label="Pilih folder tujuan">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      <SelectItem value="root">Root (My Drive)</SelectItem>
+                      {availableFolders.map((f) => (
+                        <SelectItem key={f.id} value={f.id}>
+                          {f.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setMoveOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMoveOpen(false);
+                setFolderFilter('');
+              }}
+            >
               Batal
             </Button>
             <Button
@@ -358,7 +381,13 @@ export function FileActions({ file }: { file: DriveFileDto }) {
 
       {/* Copy Dialog (File only) */}
       {!isFolder && (
-        <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
+        <Dialog
+          open={copyOpen}
+          onOpenChange={(next) => {
+            setCopyOpen(next);
+            if (!next) setFolderFilter('');
+          }}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Copy File</DialogTitle>
@@ -386,28 +415,41 @@ export function FileActions({ file }: { file: DriveFileDto }) {
                 {foldersLoading ? (
                   <p className="text-sm text-muted-foreground">Memuat daftar folder...</p>
                 ) : (
-                  <Select
-                    value={copyTargetFolderId}
-                    onValueChange={(val) => setCopyTargetFolderId(String(val))}
-                    items={folderSelectItems}
-                  >
-                    <SelectTrigger className="w-full" aria-label="Pilih folder tujuan salinan">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="root">Root (My Drive)</SelectItem>
-                      {availableFolders.map((f) => (
-                        <SelectItem key={f.id} value={f.id}>
-                          {f.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Filter nama folder tujuan..."
+                      value={folderFilter}
+                      onChange={(e) => setFolderFilter(e.target.value)}
+                    />
+                    <Select
+                      value={copyTargetFolderId}
+                      onValueChange={(val) => setCopyTargetFolderId(String(val))}
+                      items={folderSelectItems}
+                    >
+                      <SelectTrigger className="w-full" aria-label="Pilih folder tujuan salinan">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        <SelectItem value="root">Root (My Drive)</SelectItem>
+                        {availableFolders.map((f) => (
+                          <SelectItem key={f.id} value={f.id}>
+                            {f.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCopyOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCopyOpen(false);
+                  setFolderFilter('');
+                }}
+              >
                 Batal
               </Button>
               <Button

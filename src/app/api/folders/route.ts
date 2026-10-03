@@ -35,10 +35,12 @@ export const POST = withAuth(async (user, req) => {
 
 export const GET = withAuth(async (user, req) => {
   const accountId = req.nextUrl.searchParams.get('accountId');
+  const parentId = req.nextUrl.searchParams.get('parentId') ?? undefined;
+  const search = req.nextUrl.searchParams.get('search') ?? undefined;
   if (!accountId) throw new AppError('VALIDATION', 'accountId wajib.', 400);
   const account = await getAccountForUser(user.id, accountId);
   const service = await GoogleDriveService.forAccount(account);
-  const folders = await service.listFolders();
+  const folders = await service.listFolders(parentId, search);
   return ok({
     folders: folders.map((f) => ({ ...f, accountId: account.id, accountEmail: account.email })),
   });

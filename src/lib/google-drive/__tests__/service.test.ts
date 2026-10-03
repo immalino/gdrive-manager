@@ -241,4 +241,34 @@ describe('GoogleDriveService file & folder operations', () => {
     expect(folders[0]).toEqual({ id: 'dir-1', name: 'Documents' });
     vi.unstubAllGlobals();
   });
+
+  it('listFolders dengan parentId menyaring berdasarkan parent', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await service().listFolders('parent-123');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("'parent-123'%20in%20parents"),
+      expect.anything(),
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it('listFolders dengan search menyaring berdasarkan nama', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ files: [] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await service().listFolders(undefined, 'Project');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("name%20contains%20'Project'"),
+      expect.anything(),
+    );
+    vi.unstubAllGlobals();
+  });
 });

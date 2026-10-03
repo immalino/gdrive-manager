@@ -280,11 +280,21 @@ export class GoogleDriveService {
     };
   }
 
-  async listFolders(parentId?: string): Promise<Array<{ id: string; name: string }>> {
-    const parentClause = parentId ? `'${parentId}' in parents` : `'root' in parents`;
-    const q = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and ${parentClause}`;
+  async listFolders(
+    parentId?: string,
+    search?: string,
+  ): Promise<Array<{ id: string; name: string }>> {
+    let q = `mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+    if (parentId) {
+      const parentClause = parentId === 'root' ? `'root' in parents` : `'${parentId}' in parents`;
+      q += ` and ${parentClause}`;
+    }
+    if (search?.trim()) {
+      const escaped = search.trim().replace(/'/g, "\\'");
+      q += ` and name contains '${escaped}'`;
+    }
     const res = await this.request(
-      `/files?pageSize=200&q=${encodeURIComponent(q)}&fields=files(id,name)`,
+      `/files?pageSize=500&orderBy=name&q=${encodeURIComponent(q)}&fields=files(id,name)`,
     );
     const body = (await res.json()) as { files?: Array<{ id: string; name: string }> };
     return body.files ?? [];
