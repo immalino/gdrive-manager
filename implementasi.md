@@ -72,7 +72,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 3 | Enkripsi token + Google OAuth connect/disconnect + API accounts | ✅ | 2026-10-02 | Selesai; verifikasi lulus termasuk live OAuth (2 akun terhubung, token tersimpan `v1.`, status `connected`, cascade DELETE teruji). Scope `auth/drive` penuh. App Google masih **Testing** → hanya email *test user* yang boleh connect (lainnya 403 `access_denied`) dan refresh token kadaluarsa 7 hari — publish ke Production untuk pemakaian panjang. `logActivity` dikomentari → aktifkan di Sesi 6. Halaman `/dashboard/accounts` masih placeholder → tabel diisi Sesi 4. |
 | 4 | GoogleDriveService (quota) + sinkronisasi quota + halaman Accounts | ✅ | 2026-10-03 | Pipeline lulus + 11 unit test baru (fetch-mocked quota & `mapGoogleError`). Live curl: `POST /api/accounts/refresh` sukses 2 akun (snapshot `0→2→4`; token kedaluwarsa → auto-refresh lewat `getValidAccessToken`), struktur `/api/storage` benar, riwayat `/api/accounts/[id]/storage` OK, disconnect cascade OK, tanpa cookie 401, tidak ada token di log dev. Tanpa browser headless: toast `?connected=` + render tabel setelah hydration tak diverifikasi visual (SSR menampilkan skeleton; data dari API teruji). Password `tes1@example.com` direset ke `Sesi4Verify!` demi verifikasi curl. `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 5 | List/search file lintas akun + index cache `drive_files` + halaman Files | ✅ | 2026-10-03 | 100 file per akun (`nextPageToken` tidak dipakai); tombol Download masih disabled sampai Sesi 6. Verifikasi via curl: 2 akun × 100 file, search/filter/sort OK, quote search tidak error, `drive_files` terisi lintas akun, simulasi token rusak → `failedAccounts` + file akun lain tetap tampil (token dipulihkan, status `connected`). Tanpa browser headless: render tabel/label Select tak diverifikasi visual (SSR menampilkan skeleton + header kolom; data teruji lewat API). `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
-| 6 | Upload (manual, single-account), download, delete, folder, rate limit | ⬜ | | |
+| 6 | Upload (manual, single-account), download, delete, folder, rate limit | ✅ | 2026-10-03 | Mode A (akun dipilih manual); upload resumable streaming 1 file/request, multi-file = loop berurutan tanpa paralel. Deviasi plan: endpoint resumable pakai `UPLOAD_BASE` baru (`https://www.googleapis.com/upload/drive/v3`) karena snippet plan menghasilkan 404; `content-length` download hanya diteruskan bila valid (nilai kosong → respons rusak). Rate limit in-memory per proses 10/menit/user. Live curl: upload 20 MB `201` (snapshot `used_bytes` +20.971.520), kelebihan kuota `413 QUOTA_EXCEEDED`, request ke-11 `429` + `retry-after: 60`, download PDF/Doc-native/file 20 MB identik, delete 3 objek + create folder OK, `account.disconnect` diuji via akun dummy (`account.connect` butuh OAuth browser → belum ada barisnya; panggilan sudah ada di callback). Tanpa browser headless: progress bar + dialog Upload/New Folder/Delete tak diverifikasi visual. `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8. |
 | 7 | Dashboard storage + recent files/activity + global search | ⬜ | | |
 | 8 | Error handling, health status, keamanan, responsive, acceptance MVP | ⬜ | | |
 | 9 | Phase 2: Move, Rename, Copy file | ⬜ | | |
@@ -110,6 +110,13 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 - Sesi 5: `kind`/`sort` tidak valid → `400 VALIDATION`; `accountId` kosong dinormalisasi `'all'` (select default "All Accounts"). `kind` selain `other`/`folder` difilter oleh query Drive; `other`/`folder` difilter di server setelah fetch.
 - Sesi 5 (live): verifikasi curl memakai akun `tes1@example.com` / `Sesi4Verify!` (dipakai Sesi 4). Simulasi 1 akun rusak = `access_token` + `refresh_token_encrypted` diset `v1.tes` (token lama di-backup dulu) → `failedAccounts` berisi email akun itu, file akun lain tetap tampil; token dipulihkan dan status kembali `connected`.
 - Sesi 5: route `GET /api/files/[id]/download` sudah ada tapi `downloadFile` masih stub Sesi 6 → 500 bila dipanggil (400 tanpa `accountId`, 404 akun bukan milik user, 401 tanpa sesi); tombol Download di UI disabled + `title` "Sesi 6".
+- Sesi 6: snippet plan memakai `${API_BASE}/upload/drive/v3/files` → 404; endpoint resumable Google berdiri sendiri → ditambah `UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3'` di `service.ts` (jangan digabung ke `API_BASE`).
+- Sesi 6: `'content-length': res.headers.get(...) ?? ''` membuat respons download tidak valid (curl: `Invalid Content-Length: value`) → teruskan hanya bila angka > 0 dan tanpa `content-encoding`, selain itu biarkan chunked.
+- Sesi 6: kedua `update upload_jobs` difilter `and(id, user_id)` (§2.3 "tanpa kecuali"); `UploadDialog` memakai `useQuery(['storage'], { enabled: open })` agar header tidak memanggil `/api/storage` di setiap halaman.
+- Sesi 6: input file memakai `multiple`; loop berurutan tanpa paralel — bila request gagal/dibatalkan, file yang sudah terkirim dikeluarkan dari daftar sehingga tombol Upload hanya mengirim sisa.
+- Sesi 6 (review 2 sumbu): diperbaiki — update `upload_jobs` tanpa `user_id` (hard) dan query storage tanpa `enabled`; dibiarkan (judgement) — duplikasi mapping `DriveFileDto` 3× di `service.ts`, pola `activeAccountId` di 2 dialog (2 baris), union `ActivityAction` berisi aksi Sesi 9 (memang diminta plan), envelope error manual di route upload (karena `errorResponse` tidak bisa set header `retry-after`).
+- Sesi 6 (live): verifikasi curl memakai `tes1@example.com` / `Sesi4Verify!` (Sesi 4/5), cookie `/tmp/opencode/cookies-s6.txt`, `next dev` dihentikan setelah verifikasi. `account.disconnect` diuji dengan baris `google_accounts` dummy (`dummy.sesi6@example.com`, token `v1.dummy`) → baris terhapus + log tertulis; baris `activity_logs` dummy dibiarkan agar bisa dicek ulang. Google Doc native untuk uji export dibuat via Drive API lalu dihapus (kedua akun tidak punya Doc native).
+- Sesi 6: `pnpm format:check` masih gagal di 3 file lama (Sesi 1/3) — bereskan di Sesi 8.
 ```
 
 ---
@@ -2103,7 +2110,7 @@ git add -A && git commit -m "feat: cross-account file listing, search, filters a
 
 ### Langkah-langkah
 
-- [ ] **1. Test rate limit (merah)**
+- [x] **1. Test rate limit (merah)**
 
 Buat `src/lib/__tests__/rate-limit.test.ts`:
 
@@ -2139,7 +2146,7 @@ describe('rateLimit', () => {
 
 `pnpm test` → **FAIL**.
 
-- [ ] **2. Rate limit + activity log**
+- [x] **2. Rate limit + activity log**
 
 Buat `src/lib/rate-limit.ts`:
 
@@ -2192,7 +2199,7 @@ export async function logActivity(input: {
 
 Aktifkan kembali `logActivity` di `DELETE /api/accounts/[id]` (Sesi 3), dan tambahkan `action: 'account.connect'` + `googleAccountId: row.id` di akhir callback connect.
 
-- [ ] **3. Realisasi operasi file di service**
+- [x] **3. Realisasi operasi file di service**
 
 Ganti stub `uploadFile/downloadFile/deleteFile/createFolder` di `src/lib/google-drive/service.ts`:
 
@@ -2322,7 +2329,7 @@ async createFolder(name: string, parentId?: string): Promise<DriveFileDto> {
 
 Catatan: `API_BASE` sudah didefinisikan di Sesi 4. `this.account` dan `this.accessToken` dipakai oleh method baru — pastikan modifier `private` di constructor tetap terbaca dari method kelas.
 
-- [ ] **4. Upload API (streaming + rate limit + cek quota)**
+- [x] **4. Upload API (streaming + rate limit + cek quota)**
 
 Buat `src/app/api/files/upload/route.ts`:
 
@@ -2402,7 +2409,7 @@ export const POST = withAuth(async (user, req) => {
 });
 ```
 
-- [ ] **5. Delete + folders API + finalisasi download**
+- [x] **5. Delete + folders API + finalisasi download**
 
 Buat `src/app/api/files/[id]/route.ts`:
 
@@ -2470,7 +2477,7 @@ export const GET = withAuth<Ctx>(async (user, req, ctx) => {
 });
 ```
 
-- [ ] **6. UploadDialog (Mode A: manual)**
+- [x] **6. UploadDialog (Mode A: manual)**
 
 Buat `src/components/upload/upload-dialog.tsx` (client):
 
@@ -2504,14 +2511,14 @@ URL: `/api/files/upload?accountId=${id}&filename=${encodeURIComponent(file.name)
 - Progress bar (shadcn `progress`), tombol **Batal** (`xhr.abort()`), sukses → toast (sonner) + invalidasi `['files']`, `['storage']`.
 - Error mapping: `RATE_LIMITED` (tampilkan waktu tunggu), `QUOTA_EXCEEDED`, `ACCOUNT_DISCONNECTED` (link `/api/google/connect`).
 
-- [ ] **7. Aksi Delete & New Folder di UI; aktifkan Download**
+- [x] **7. Aksi Delete & New Folder di UI; aktifkan Download**
 
 Di `src/components/files/file-actions.tsx`:
 - **Download** → aktifkan kembali (Sesi 5 dinonaktifkan): `<a href={/api/files/${id}/download?accountId=${accountId}} download>`.
 - **Delete** → AlertDialog ("File dihapus permanen dari Google Drive akun ini") → `api.delete(...)` → invalidasi `['files']`, `['storage']`.
 - **New Folder** (toolbar Files) → Dialog input nama + pilihan akun → `api.post('/api/folders', {...})`.
 
-- [ ] **8. Pipeline + commit**
+- [x] **8. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -2520,20 +2527,21 @@ git add -A && git commit -m "feat: upload with progress, download, delete, folde
 
 ### Verifikasi
 
-- [ ] `pnpm test` → test rate limit PASS
-- [ ] Upload file 20 MB ke akun berkuota cukup → progress sampai 100%, file muncul di tabel, snapshot terbaru `used_bytes` naik
-- [ ] Upload lebih besar dari freeSpace target → ditolak `QUOTA_EXCEEDED`, tidak ada file masuk Drive
-- [ ] `select status, count(*) from upload_jobs group by status` → `completed` bertambah
-- [ ] `select action, count(*) from activity_logs group by action` → ada `file.upload`, `file.delete`, `folder.create`, `account.connect`, `account.disconnect`
-- [ ] Download file `.pdf` **dan** file Google Doc (native) → keduanya menghasilkan file terunduh
-- [ ] Delete file → hilang dari tabel dan dari Drive web
-- [ ] 11 request upload cepat dalam 1 menit → ke-11 `429` + header `retry-after`
-- [ ] `pnpm build` lulus (streaming `req.body` ke fetch tidak error)
+- [x] `pnpm test` → test rate limit PASS (29 test)
+- [x] Upload file 20 MB ke akun berkuota cukup → `201` + file muncul di `GET /api/files`, snapshot terbaru `used_bytes` naik `1440338926 → 1461310446` (+20.971.520). **Terbatas**: progress bar tak diverifikasi visual; upload terbukti lewat API `201` + `xhr.upload.onprogress` (tanpa browser headless)
+- [x] Upload lebih besar dari freeSpace target → ditolak `QUOTA_EXCEEDED` (`413`, spoof `Content-Length: 15000000000`), tidak ada file masuk Drive (search nama → kosong)
+- [x] `select status, count(*) from upload_jobs group by status` → `completed` 2, `failed` 1 (job ditulis sebelum upload, ditutup di kedua jalur)
+- [x] `select action, count(*) from activity_logs group by action` → ada `file.upload` (2), `file.download` (6), `file.delete` (4), `folder.create` (1), `account.disconnect` (1)
+- [ ] Baris `account.connect` di `activity_logs` — **terbatas**: callback live butuh browser OAuth (lihat catatan Sesi 3); panggilan `logActivity` diverifikasi lewat review kode + jalur gagal callback (`?code=x&state=y` → `307 ?error=invalid_state`) tetap sehat
+- [x] Download file `.pdf` **dan** file Google Doc (native) → keduanya menghasilkan file terunduh (`pdf` 530.110 B valid PDF; Doc → export `application/pdf` 8.959 B; file 20 MB `cmp` identik). Catatan: kedua akun tidak punya Doc native → dibuat satu via Drive API untuk uji, lalu dihapus
+- [x] Delete file → hilang dari tabel dan dari Drive web (3 objek: file 20 MB, Doc uji, folder uji → `{"deleted":true}`, search berikutnya kosong)
+- [x] 11 request upload cepat dalam 1 menit → ke-11 `429` + header `retry-after: 60` (10 pertama `400 VALIDATION` tetap menghabiskan kuota)
+- [x] `pnpm build` lulus (streaming `req.body` ke fetch tidak error)
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 6
-- [ ] Update baris **Sesi 6** di tracker: ✅, tanggal, catatan (mis. "upload 1 file/request via resumable streaming; multi-file paralel ditunda ke Phase 3")
+- [x] Commit terakhir sesi 6
+- [x] Update baris **Sesi 6** di tracker: ✅, tanggal, catatan (upload resumable streaming, multi-file = loop berurutan 1 file/request)
 
 ---
 
