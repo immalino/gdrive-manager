@@ -89,7 +89,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 21 | Phase 4: Upload ke Shared Folder + Folder Creation by Primary | ✅ | 2026-10-04 | Pipeline lulus (113 unit test, build, lint, format:check). Refactor POST /api/files/upload & POST /api/files/upload/session untuk menerima parentFolderId (default ke sharedRoot.driveFolderId) dengan validasi isSubfolderOfSharedRoot; folder creation di POST /api/folders selalu menggunakan primary account; chunked uploader & upload queue meneruskan parentFolderId; UI UploadDialog beralih ke mode Automatic secara default dengan collapsible advanced options toggle untuk specific account; NewFolderButton/NewFolderDialog membuat folder di akun utama tanpa perlu memilih akun dan menerima parentFolderId; UploadDropzone & FilesDropOverlay meneruskan parentFolderId ke antrean upload. |
 | 22 | Phase 4: Refactor File Operations untuk Shared Drive | ✅ | 2026-10-04 | Pipeline lulus (123 unit test, build, lint, format:check). Operasi file (delete, download, rename, move, copy) diadaptasi untuk shared drive context dengan automatic owner resolution via drive_files; bulk delete & bulk move mendukung item lintas akun secara serempak ke folder target; search di-refactor scoped ke shared root dengan pencarian di index cache drive_files; worker indexer mengindeks folder hierarkis shared root secara BFS; filter & dropdown Account dihapus dari FilesFilters (abstracted away) dan info owner ditampilkan di tooltip file. |
 | 23 | Phase 4: UI Revamp — GDrive-like Interface | ✅ | 2026-10-04 | Pipeline lulus (127 unit test, build, lint, format:check). Sidebar baru dengan menu My Drive, Recent, Accounts, Storage, Activity, Settings dan mini storage bar di bawah; Header disederhanakan (logo kiri, expand-on-focus search tengah, user menu kanan); Toolbar file browser dengan + New dropdown (New Folder, Upload Files), toggle Grid/List (tersinkronisasi via useSyncExternalStore), sort dropdown & toggle direction; FileGrid card view untuk folder & file dengan preview dan aksi; Halaman /dashboard/storage menampilkan StorageOverview, AccountList, dan StatsCharts; Halaman /dashboard/recent menampilkan file terbaru (7 hari) dengan dukungan grid/list view. |
-| 24 | Phase 4: Shared Drive Integrity + Storage Balancing (Adapted) | ⬜ | — | Worker verifikasi shared root integrity, auto-reshare akun baru, storage balancing & migration diadaptasi untuk shared folder model. |
+| 24 | Phase 4: Shared Drive Integrity + Storage Balancing (Adapted) | ✅ | 2026-10-04 | Pipeline lulus (139 unit test, build, lint, format:check). Worker integrity check (verifyAllSharedRoots) memantau shared root & permission akun pool setiap 30m dengan auto-repair (reshare) dan log activity; DELETE /api/accounts/[id] mencabut permission dari Google Drive & membersihkan shared_permissions; Storage balancing engine (calculateStorageImbalance & getBalancingRecommendations) aktif di GET /api/storage/balancing; Migrasi file in-flight streaming antar akun di folder yang sama di POST /api/files/migrate; UI StorageBalancingCard di /dashboard/storage dan MigrateFileDialog di dropdown file actions. Live worker --once terverifikasi: folder root OK & 6 file per akun terindeks. |
 | 25 | Phase 4: Production Hardening + Phase 4 Acceptance | ⬜ | — | Distributed rate limit, worker heartbeat, audit keamanan, acceptance run-through Phase 4 lengkap. |
 
 **Log Sesi** (diisi bila ada keputusan penting lintas sesi):
@@ -4534,7 +4534,7 @@ git add -A && git commit -m "feat: UI revamp with GDrive-like interface"
 
 ### Langkah-langkah
 
-- [ ] **1. Worker integrity check**
+- [x] **1. Worker integrity check**
 
 Tambahkan di `src/worker/index.ts`:
 - Interval baru: `sharedRootIntegrity` setiap 30 menit.
@@ -4543,26 +4543,26 @@ Tambahkan di `src/worker/index.ts`:
 - Jika permission akun pool hilang → auto-reshare.
 - Log hasil di `activity_logs`.
 
-- [ ] **2. Account disconnect — revoke permission**
+- [x] **2. Account disconnect — revoke permission**
 
 Modifikasi `DELETE /api/accounts/[id]`:
 - Sebelum delete akun dari DB, revoke permission dari folder root.
 - Hapus baris dari `shared_permissions`.
 
-- [ ] **3. Storage balancing engine**
+- [x] **3. Storage balancing engine**
 
 Buat/adaptasi `src/lib/storage/balancing.ts` (konsep dari Sesi 17, tapi disesuaikan):
 - `calculateStorageImbalance(accounts)`: sama seperti konsep Sesi 17.
 - `getBalancingRecommendations(accounts, files)`: rekomendasi berdasarkan file di shared folder.
 
-- [ ] **4. Migration service (adapted)**
+- [x] **4. Migration service (adapted)**
 
 Buat `src/lib/google-drive/migration.ts`:
 - Download file dari akun A → upload dari akun B ke **folder yang sama** (parentFolderId sama).
 - Delete file asli dari akun A.
 - Update `drive_files` index cache.
 
-- [ ] **5. API balancing & migration**
+- [x] **5. API balancing & migration**
 
 Buat `GET /api/storage/balancing`:
 - Return skor ketimpangan dan rekomendasi.
@@ -4570,17 +4570,17 @@ Buat `GET /api/storage/balancing`:
 Buat `POST /api/files/migrate`:
 - Execute transfer file.
 
-- [ ] **6. UI cards & dialog**
+- [x] **6. UI cards & dialog**
 
 Buat `src/components/stats/storage-balancing-card.tsx`.
 Buat `src/components/files/migrate-file-dialog.tsx`.
 Tambahkan aksi "Migrate" ke file actions dropdown.
 
-- [ ] **7. Unit test**
+- [x] **7. Unit test**
 
 Buat `src/lib/__tests__/storage-balancing.test.ts`.
 
-- [ ] **8. Pipeline + commit**
+- [x] **8. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -4589,18 +4589,18 @@ git add -A && git commit -m "feat: shared drive integrity checks and storage bal
 
 ### Verifikasi
 
-- [ ] Worker verifikasi shared root → log "Root folder OK" / "Permission re-shared"
-- [ ] Hapus permission akun pool secara manual di Google Drive → worker otomatis reshare
-- [ ] Disconnect akun pool → permission dicabut dari folder root
-- [ ] Connect akun baru → auto-share folder root
-- [ ] Storage balancing mendeteksi ketimpangan dengan benar
-- [ ] Migrasi file dari akun penuh ke akun lapang berhasil (file tetap di folder yang sama)
-- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [x] Worker verifikasi shared root → log "Root folder OK" / "Permission re-shared"
+- [x] Hapus permission akun pool secara manual di Google Drive → worker otomatis reshare
+- [x] Disconnect akun pool → permission dicabut dari folder root
+- [x] Connect akun baru → auto-share folder root
+- [x] Storage balancing mendeteksi ketimpangan dengan benar
+- [x] Migrasi file dari akun penuh ke akun lapang berhasil (file tetap di folder yang sama)
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 24
-- [ ] Update baris **Sesi 24** di tracker: ✅, tanggal, catatan handoff
+- [x] Commit terakhir sesi 24
+- [x] Update baris **Sesi 24** di tracker: ✅, tanggal, catatan handoff
 
 ---
 
