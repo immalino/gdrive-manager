@@ -46,6 +46,10 @@ export async function GET(req: NextRequest) {
     return failRedirect(req, 'exchange_failed');
   }
 
+  const existingPrimary = await db.query.googleAccounts.findFirst({
+    where: and(eq(googleAccounts.userId, userId), eq(googleAccounts.role, 'primary')),
+  });
+
   const values: Omit<typeof googleAccounts.$inferInsert, 'refreshTokenEncrypted'> = {
     userId,
     googleAccountId: info.sub,
@@ -55,6 +59,7 @@ export async function GET(req: NextRequest) {
     accessToken: encryptSecret(tokens.access_token),
     tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
     status: 'connected',
+    role: !existingPrimary ? 'primary' : 'pool',
     updatedAt: new Date(),
   };
 
@@ -97,16 +102,23 @@ export async function GET(req: NextRequest) {
     userId,
     googleAccountId: row!.id,
     action: 'account.connect',
-    metadata: { email: row!.email },
+    metadata: { email: row!.email, role: row!.role },
   });
 
-  // Jika user sudah memiliki shared root, otomatis share folder root ke akun baru ini
+  // Jika user belum memiliki shared root dan akun ini adalah primary, otomatis buat shared root
   try {
     const sharedRoot = await db.query.sharedRoots.findFirst({
       where: eq(sharedRoots.userId, userId),
     });
 
-    if (sharedRoot && sharedRoot.primaryAccountId !== row!.id) {
+    if (!sharedRoot && row!.role === 'primary') {
+      const { initSharedRoot } = await import('@/lib/shared-drive/setup');
+      await initSharedRoot({
+        userId,
+        primaryAccountId: row!.id,
+        folderName: 'GDrive Pool',
+      });
+    } else if (sharedRoot && sharedRoot.primaryAccountId !== row!.id) {
       const primaryAccount = await db.query.googleAccounts.findFirst({
         where: and(
           eq(googleAccounts.id, sharedRoot.primaryAccountId),
