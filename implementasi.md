@@ -90,7 +90,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 22 | Phase 4: Refactor File Operations untuk Shared Drive | ✅ | 2026-10-04 | Pipeline lulus (123 unit test, build, lint, format:check). Operasi file (delete, download, rename, move, copy) diadaptasi untuk shared drive context dengan automatic owner resolution via drive_files; bulk delete & bulk move mendukung item lintas akun secara serempak ke folder target; search di-refactor scoped ke shared root dengan pencarian di index cache drive_files; worker indexer mengindeks folder hierarkis shared root secara BFS; filter & dropdown Account dihapus dari FilesFilters (abstracted away) dan info owner ditampilkan di tooltip file. |
 | 23 | Phase 4: UI Revamp — GDrive-like Interface | ✅ | 2026-10-04 | Pipeline lulus (127 unit test, build, lint, format:check). Sidebar baru dengan menu My Drive, Recent, Accounts, Storage, Activity, Settings dan mini storage bar di bawah; Header disederhanakan (logo kiri, expand-on-focus search tengah, user menu kanan); Toolbar file browser dengan + New dropdown (New Folder, Upload Files), toggle Grid/List (tersinkronisasi via useSyncExternalStore), sort dropdown & toggle direction; FileGrid card view untuk folder & file dengan preview dan aksi; Halaman /dashboard/storage menampilkan StorageOverview, AccountList, dan StatsCharts; Halaman /dashboard/recent menampilkan file terbaru (7 hari) dengan dukungan grid/list view. |
 | 24 | Phase 4: Shared Drive Integrity + Storage Balancing (Adapted) | ✅ | 2026-10-04 | Pipeline lulus (139 unit test, build, lint, format:check). Worker integrity check (verifyAllSharedRoots) memantau shared root & permission akun pool setiap 30m dengan auto-repair (reshare) dan log activity; DELETE /api/accounts/[id] mencabut permission dari Google Drive & membersihkan shared_permissions; Storage balancing engine (calculateStorageImbalance & getBalancingRecommendations) aktif di GET /api/storage/balancing; Migrasi file in-flight streaming antar akun di folder yang sama di POST /api/files/migrate; UI StorageBalancingCard di /dashboard/storage dan MigrateFileDialog di dropdown file actions. Live worker --once terverifikasi: folder root OK & 6 file per akun terindeks. |
-| 25 | Phase 4: Production Hardening + Phase 4 Acceptance | ⬜ | — | Distributed rate limit, worker heartbeat, audit keamanan, acceptance run-through Phase 4 lengkap. |
+| 25 | Phase 4: Production Hardening + Phase 4 Acceptance | ✅ | 2026-10-04 | Pipeline lulus (147 unit test, build, lint, format:check). Distributed rate limiter PostgreSQL (sliding window) aktif di seluruh mutation endpoints; Worker heartbeat monitoring (tabel worker_status, worker heartbeat loop 30s, GET /api/worker/health, WorkerStatusBadge di header); Audit keamanan 100% lulus (withAuth, user_id scoping, zero token leak, safe shared permissions, CSRF state OAuth); Seluruh 14 Acceptance Criteria Phase 4 (PRD §15) terverifikasi end-to-end; README.md ditulis ulang dengan arsitektur Shared Virtual Drive. Phase 4 Selesai 🎉 |
 
 **Log Sesi** (diisi bila ada keputusan penting lintas sesi):
 
@@ -4646,31 +4646,31 @@ git add -A && git commit -m "feat: shared drive integrity checks and storage bal
 
 ### Langkah-langkah
 
-- [ ] **1. Distributed rate limiter**
+- [x] **1. Distributed rate limiter**
 
 Implementasi sesuai konsep Sesi 18 (tabel `rate_limits`, sliding window, ganti semua API routes).
 
-- [ ] **2. Worker heartbeat**
+- [x] **2. Worker heartbeat**
 
 Implementasi sesuai konsep Sesi 18 (tabel `worker_status`, heartbeat loop, API health, badge UI).
 
-- [ ] **3. Audit keamanan**
+- [x] **3. Audit keamanan**
 
 Checklist:
-- [ ] Semua API route dilindungi `withAuth`
-- [ ] Semua query difilter `user.id`
-- [ ] Tidak ada token di console/log
-- [ ] Shared folder permission hanya untuk akun milik user
-- [ ] Rate limit aktif pada semua mutation endpoints
-- [ ] CSRF protection pada OAuth flow
+- [x] Semua API route dilindungi `withAuth`
+- [x] Semua query difilter `user.id`
+- [x] Tidak ada token di console/log
+- [x] Shared folder permission hanya untuk akun milik user
+- [x] Rate limit aktif pada semua mutation endpoints
+- [x] CSRF protection pada OAuth flow
 
-- [ ] **4. Acceptance run-through Phase 4**
+- [x] **4. Acceptance run-through Phase 4**
 
 Jalankan seluruh acceptance criteria dari PRD.md §15:
 - Verifikasi via curl dan/atau browser.
 - Catat hasil per item.
 
-- [ ] **5. Update README.md**
+- [x] **5. Update README.md**
 
 Tulis ulang README.md:
 - Arsitektur Shared Virtual Drive.
@@ -4680,7 +4680,7 @@ Tulis ulang README.md:
 - Worker configuration.
 - Acceptance status.
 
-- [ ] **6. Pipeline + commit final**
+- [x] **6. Pipeline + commit final**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -4689,17 +4689,17 @@ git add -A && git commit -m "feat: production hardening and phase 4 acceptance"
 
 ### Verifikasi
 
-- [ ] Distributed rate limiter efektif (429 pada overuse dari 2 proses berbeda)
-- [ ] Worker heartbeat aktif, badge UI berubah sesuai status
-- [ ] Audit keamanan 100% lulus
-- [ ] Seluruh 14 Acceptance Criteria Phase 4 terpenuhi
-- [ ] README.md lengkap dan akurat
-- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [x] Distributed rate limiter efektif (429 pada overuse dari 2 proses berbeda)
+- [x] Worker heartbeat aktif, badge UI berubah sesuai status
+- [x] Audit keamanan 100% lulus
+- [x] Seluruh 14 Acceptance Criteria Phase 4 terpenuhi
+- [x] README.md lengkap dan akurat
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 25
-- [ ] Update baris **Sesi 25** di tracker: ✅, tanggal, catatan (Phase 4 Selesai 🎉)
+- [x] Commit terakhir sesi 25
+- [x] Update baris **Sesi 25** di tracker: ✅, tanggal, catatan (Phase 4 Selesai 🎉)
 
 ---
 
