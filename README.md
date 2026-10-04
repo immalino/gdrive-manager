@@ -1,68 +1,122 @@
-# GDrive Multi-Account Manager
+# GDrive Multi-Account Manager — Shared Virtual Drive
 
-Aplikasi web modern berbasis Next.js App Router untuk mengelola beberapa akun Google Drive dalam satu dashboard terpadu. Pengguna dapat menghubungkan banyak akun Google, memantau penggunaan kuota agregat maupun per akun, mencari dan menelusuri file lintas akun, mengunggah file dengan seleksi akun manual, mengunduh file biner maupun mengekspor Google Docs native, membuat folder, serta menghapus file tanpa perlu berpindah-pindah tab browser Google Drive.
+Aplikasi web modern berbasis Next.js App Router (Phase 4: **Shared Virtual Drive**) untuk menyatukan banyak akun Google Drive ke dalam satu penyimpanan virtual terpadu berkapasitas besar (~1.5 TB+ dari 100 akun).
 
----
-
-## Fitur Utama (MVP)
-
-- **Otentikasi Pengguna**: Login dan pendaftaran mandiri aman menggunakan Better Auth (email & password).
-- **Multi-Akun Google Drive**: Koneksi multi-akun Google Drive via Google OAuth 2.0 dengan penanganan refresh token otomatis.
-- **Enkripsi Kredensial**: Access token dan refresh token disimpan terenkripsi dengan algoritma AES-256-GCM at-rest di database.
-- **Dashboard Penyimpanan Agregat**: Kartu ringkasan total storage, ruang terpakai, ruang tersisa, jumlah akun, dan baris visualisasi per akun.
-- **File Manager Lintas Akun**: Menampilkan file dari semua akun terhubung dalam satu tabel interaktif (sort, filter jenis file, filter akun, pencarian global).
-- **Upload Streaming Resumable**: Unggah file langsung ke Google Drive API dengan progress bar dan validasi kuota sebelum upload.
-- **Download & Ekspor Fleksibel**: Unduh file biner langsung dari Drive, serta ekspor file Google Docs / Sheets / Slides native ke format PDF/Office.
-- **Folder Management & Deletion**: Pembuatan folder baru pada akun target dan penghapusan file permanen dengan konfirmasi dialog.
-- **Health Status & Pemulihan Akun**: Indikator status akun (`Connected`, `Reconnect Required`, `Error`), penanganan `invalid_grant`, dan tombol Reconnect langsung.
-- **Keamanan Ketat & Rate Limiting**: Proteksi endpoint mutasi (30 req/menit) dan upload (10 req/menit), isolasi data pengguna berbasis ID sesi (`user_id`).
+Pengguna melihat satu **"My Drive"** terpadu yang menyerupai Google Drive asli tanpa perlu memusingkan di akun mana berkas tersimpan. Berkas baru secara otomatis diarahkan ke akun dengan sisa kuota terbesar, izin folder root dibagikan secara otomatis ke semua akun pool, dan integritas serta kesehatan worker dipantau secara real-time.
 
 ---
 
-## Prasyarat Sistem
+## 🌟 Arsitektur Shared Virtual Drive (Phase 4)
 
-- **Node.js**: Versi 20.x atau lebih baru
-- **Package Manager**: `pnpm` (disarankan v9/v10)
-- **Docker & Docker Compose**: Untuk menjalankan instance PostgreSQL 16
-- **Google Cloud Console**: Proyek Google Cloud dengan Google Drive API diaktifkan dan kredensial OAuth 2.0 Web Application
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                 Frontend UI (GDrive-like)                   │
+│  - File Browser ("My Drive") dengan navigasi hierarkis     │
+│  - Breadcrumb klikabel, Toolbar (+ New Folder, ↑ Upload)   │
+│  - Grid / List View toggle, Multi-select & Bulk operations  │
+│  - Worker Status Heartbeat Badge & Storage Pool Bar         │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Next.js API Routes (App Router)             │
+│  - Distributed Rate Limiter (PostgreSQL Sliding Window)     │
+│  - Auth (Better Auth) & Guard Session                       │
+│  - Setup & Permissions Service (Shared Root & Pool Sharing) │
+│  - File Operations & Streaming Upload / Migration           │
+└──────────────┬──────────────────────────────┬───────────────┘
+               │                              │
+               ▼                              ▼
+┌──────────────────────────────┐ ┌────────────────────────────┐
+│      PostgreSQL Database     │ │   Background Worker Daemon │
+│  - google_accounts (role)    │ │  - Heartbeat (setiap 30 dtk)│
+│  - shared_roots              │ │  - Quota sync (10 mnt)     │
+│  - shared_permissions        │ │  - Integrity check (30 mnt)│
+│  - drive_files (cache index) │ │  - Indexing cache (60 mnt) │
+│  - rate_limits (distributed) │ └────────────────────────────┘
+│  - worker_status (heartbeat) │
+└──────────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Google Drive API v3                     │
+│  ┌───────────────────────┐       ┌───────────────────────┐  │
+│  │     Akun Utama        │       │      Akun-Akun Pool   │  │
+│  │   (Role: Primary)     │       │     (Role: Pool)      │  │
+│  │  - Pemilik Folder Root│       │  - Akses Editor Root  │  │
+│  │  - Pembuat Subfolder  │       │  - Menampung Berkas   │  │
+│  │  - Pewaris Permission │       │  - Kuota Terdistribusi│  │
+│  └───────────────────────┘       └───────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Konsep Inti:
+1. **Satu Folder Root Terpadu**: Dibuat di akun utama saat Setup Wizard dan otomatis di-share dengan hak akses `writer` (Editor) ke semua akun pool yang terhubung.
+2. **Distribusi Kuota Otomatis (Automatic Allocation)**: Setiap berkas yang diunggah otomatis dialokasikan ke akun yang memiliki sisa ruang paling besar yang muat menampung berkas. Google Drive API membebankan kuota berkas ke pengunggah (bukan pemilik folder).
+3. **Struktur Folder Terpusat**: Subfolder selalu dibuat menggunakan token akun utama untuk menjamin konsistensi kepemilikan dan pewarisan izin (*inherited permissions*).
+4. **Distributed Rate Limiting**: Pembatasan request berbasis tabel PostgreSQL (`rate_limits`) dengan algoritma sliding window, melindungi sistem multi-proses tanpa ketergantungan Redis.
+5. **Worker Heartbeat & Integrity Check**: Worker memperbarui heartbeat setiap 30 detik ke `worker_status`. Jika permission Google Drive terputus atau hilang, worker melakukan perbaikan otomatis (*auto-repair*).
 
 ---
 
-## Panduan Setup Step-by-Step
+## 🚀 Fitur Lengkap Aplikasi
 
-### 1. Kloning dan Masuk ke Repositori
+- **Setup Wizard Multi-Step**: Inisialisasi folder root di akun utama dan pembagian permission ke akun pool secara terpandu.
+- **File Browser Menyerupai Google Drive**: Navigasi subfolder interaktif, breadcrumbs hierarkis, tampilan Grid card dan List table.
+- **Upload Queue & Resumable Upload**:
+  - Drag-and-drop langsung dari desktop.
+  - Antrean upload paralel (concurrency limit 2) dengan progress bar mengambang (*drawer*).
+  - Protokol resumable upload Google Drive berpotongan chunk 5 MB untuk file besar dengan fitur pemulihan saat koneksi terputus.
+- **Operasi File Lengkap**:
+  - Download file biner langsung dan ekspor Google Docs / Sheets / Slides ke format PDF/Office.
+  - Delete file tunggal maupun bulk delete lintas akun dengan pool concurrency.
+  - Rename dan Move file/folder dengan dialog folder picker.
+  - Copy file dalam folder aktif.
+- **Storage Balancing Engine & Migration**: Mendeteksi ketimpangan beban penyimpanan antar akun dan memindahkan kepemilikan file secara streaming in-flight antar akun di dalam shared folder yang sama.
+- **Worker Heartbeat Monitoring**: Indikator visual real-time status worker di header (Active / Stale / Stopped) via `GET /api/worker/health`.
+- **Statistik & Visualisasi**: Area chart riwayat penggunaan storage pool dan pie/bar breakdown jenis file dokumen, gambar, video, arsip.
 
+---
+
+## 📋 Prasyarat Sistem
+
+- **Node.js**: Versi 20.x atau lebih baru (direkomendasikan v22)
+- **Package Manager**: `pnpm` (v9 atau v10)
+- **Docker & Docker Compose**: Untuk PostgreSQL 16
+- **Google Cloud Console**: OAuth 2.0 Web Application Credentials dengan Google Drive API v3 diaktifkan
+
+---
+
+## 🛠️ Panduan Instalasi & Setup
+
+### 1. Kloning Repositori
 ```bash
 git clone <repository-url>
 cd gdrive-drive
 ```
 
-### 2. Jalankan Database PostgreSQL (Docker)
-
+### 2. Jalankan Database PostgreSQL via Docker
 ```bash
-docker compose up -d
+docker compose up -d postgres
 ```
-
-Pastikan container PostgreSQL berjalan sehat di port `5432`:
+Periksa status container:
 ```bash
 docker compose ps
 ```
 
 ### 3. Konfigurasi Environment Variables
-
 Salin template berkas `.env.example` ke `.env`:
-
 ```bash
 cp .env.example .env
 ```
 
-Hasilkan kunci enkripsi rahasia:
+Hasilkan rahasia acak untuk enkripsi:
 ```bash
 openssl rand -base64 32   # Masukkan ke TOKEN_ENCRYPTION_KEY
 openssl rand -base64 32   # Masukkan ke BETTER_AUTH_SECRET
 ```
 
-Isi variabel environment di dalam `.env`:
+Lengkapi berkas `.env`:
 ```env
 DATABASE_URL=postgresql://gdrive:gdrive@localhost:5432/gdrive_manager
 BETTER_AUTH_SECRET=<hasil_openssl_rand_base64>
@@ -74,186 +128,101 @@ GOOGLE_REDIRECT_URI=http://localhost:3000/api/google/callback
 TOKEN_ENCRYPTION_KEY=<hasil_openssl_rand_base64>
 ```
 
-### 4. Instalasi Dependensi
-
+### 4. Instalasi Dependensi & Migrasi Database
 ```bash
 pnpm install
-```
-
-### 5. Migrasi Database Drizzle
-
-Terapkan skema database ke PostgreSQL:
-```bash
 pnpm db:migrate
 ```
 
-### 6. Jalankan Server Development
-
+### 5. Menjalankan Aplikasi
 ```bash
 pnpm dev
 ```
+Akses aplikasi melalui peramban di `http://localhost:3000`.
 
-Buka peramban di `http://localhost:3000`.
+### 6. Menjalankan Background Worker Daemon
+Worker bertugas menjaga integritas folder root, memperbarui heartbeat status, menyinkronkan kuota, dan mengindeks file:
+```bash
+# Mode development / terminal lokal:
+pnpm worker
 
-### 7. Jalankan Background Worker (Sync, Health Check, Indexing)
+# Sekali jalan (verifikasi/testing):
+pnpm worker --once
 
-Worker berjalan sebagai proses terpisah yang melakukan sinkronisasi kuota (setiap 10 menit), pemantauan kesehatan koneksi akun (setiap 30 menit), dan pembaruan indeks cache `drive_files` (setiap 60 menit).
+# Mode produksi (VPS / PM2):
+pm2 start "pnpm worker" --name gdrive-worker
 
-- **Development / Lokal:**
-  ```bash
-  pnpm worker
-  ```
-  *(Tambahkan argumen `--once` untuk menjalankan satu putaran sinkronisasi lalu keluar: `pnpm worker --once`)*
-
-- **Docker Compose:**
-  ```bash
-  docker compose up -d worker
-  ```
-
-- **VPS Produksi:**
-  Di lingkungan VPS produksi, lebih direkomendasikan menjalankan worker via systemd atau PM2:
-  ```bash
-  pm2 start "pnpm worker" --name gdrive-worker
-  ```
+# Mode Docker Compose:
+docker compose up -d worker
+```
 
 ---
 
-## Konfigurasi Google OAuth 2.0
+## 🔐 Konfigurasi Google Cloud Console (OAuth 2.0)
 
 1. Buka [Google Cloud Console](https://console.cloud.google.com/).
 2. Buat proyek baru atau pilih proyek yang sudah ada.
-3. Masuk ke menu **APIs & Services > Library**, cari **Google Drive API**, lalu klik **Enable**.
-4. Masuk ke **APIs & Services > OAuth consent screen**:
-   - Pilih jenis pengguna **External**.
-   - Isi informasi aplikasi (nama aplikasi, email dukungan).
-   - Pada bagian **Test users**, tambahkan alamat email Google yang akan dihubungkan saat pengujian (wajib selama status aplikasi masih *Testing*).
-5. Masuk ke **APIs & Services > Credentials**:
-   - Klik **Create Credentials > OAuth client ID**.
-   - Pilih Application type: **Web application**.
-   - Tambahkan Authorized redirect URI:
-     `http://localhost:3000/api/google/callback`
-   - Simpan, lalu salin **Client ID** dan **Client Secret** ke file `.env`.
-   - Restart server dev (`pnpm dev`) setelah memperbarui `.env`.
+3. Di **APIs & Services > Library**, aktifkan **Google Drive API**.
+4. Di **APIs & Services > OAuth consent screen**:
+   - Tipe: **External**.
+   - Tambahkan email pengguna uji di bagian **Test users** (karena status aplikasi masih *Testing*).
+5. Di **APIs & Services > Credentials**:
+   - Buat kredensial **OAuth client ID** (Application type: **Web application**).
+   - Masukkan **Authorized redirect URIs**: `http://localhost:3000/api/google/callback`.
+   - Simpan, salin Client ID & Client Secret ke file `.env`.
 
 ---
 
-## Daftar Skrip npm / pnpm
+## 📜 Skrip pnpm yang Tersedia
 
-| Skrip | Deskripsi |
+| Perintah | Deskripsi |
 | --- | --- |
 | `pnpm dev` | Menjalankan Next.js development server (Turbopack) |
 | `pnpm build` | Membangun build produksi Next.js |
 | `pnpm start` | Menjalankan server build produksi |
-| `pnpm lint` | Menjalankan ESLint pada seluruh codebase |
-| `pnpm typecheck` | Menjalankan TypeScript type check tanpa emit (`tsc --noEmit`) |
-| `pnpm test` | Menjalankan unit test dengan Vitest |
-| `pnpm format` | Memformat kode menggunakan Prettier |
-| `pnpm format:check` | Memvalidasi kepatuhan format Prettier tanpa modifikasi |
-| `pnpm db:generate` | Menghasilkan berkas migrasi SQL baru dari skema Drizzle |
+| `pnpm lint` | Menjalankan ESLint |
+| `pnpm typecheck` | Menjalankan TypeScript typecheck (`tsc --noEmit`) |
+| `pnpm test` | Menjalankan seluruh test suite unit & fetch-mocked dengan Vitest |
+| `pnpm db:generate` | Menghasilkan migrasi SQL baru dari skema Drizzle |
 | `pnpm db:migrate` | Menerapkan migrasi database ke PostgreSQL |
+| `pnpm worker` | Menjalankan worker loop (heartbeat, sync, integrity, index) |
+| `pnpm format` | Menjalankan Prettier code formatter |
+| `pnpm format:check`| Memeriksa kepatuhan format kode |
 
 ---
 
-## Struktur Folder Proyek
+## 🔒 Audit Keamanan (PRD §10 & Global Constraints)
 
-```text
-src/
-├── app/
-│   ├── (auth)/sign-in/page.tsx       # Halaman Masuk
-│   ├── (auth)/sign-up/page.tsx       # Halaman Pendaftaran
-│   ├── dashboard/
-│   │   ├── layout.tsx                # Guard sesi & shell navigasi
-│   │   ├── page.tsx                  # Dashboard ringkasan penyimpanan
-│   │   ├── error.tsx                 # Error boundary dashboard
-│   │   ├── files/page.tsx            # File manager lintas akun
-│   │   ├── accounts/page.tsx         # Manajemen akun Google & sinkronisasi
-│   │   ├── activity/page.tsx         # Riwayat aktivitas
-│   │   └── settings/page.tsx         # Pengaturan profil pengguna
-│   ├── error.tsx                     # Error boundary global aplikasi
-│   └── api/
-│       ├── auth/[...all]/route.ts    # Handler otentikasi Better Auth
-│       ├── google/connect/route.ts   # Inisiasi OAuth Google
-│       ├── google/callback/route.ts  # Pertukaran kode OAuth & callback
-│       ├── accounts/route.ts         # Daftar akun Google milik pengguna
-│       ├── accounts/[id]/route.ts    # Hapus/putuskan akun Google
-│       ├── accounts/refresh/route.ts # Sinkronisasi kuota seluruh akun
-│       ├── accounts/[id]/storage/    # Riwayat snapshot kuota akun
-│       ├── storage/route.ts          # Agregasi total kuota storage
-│       ├── files/route.ts            # Daftar & pencarian file lintas akun
-│       ├── files/upload/route.ts     # Upload file streaming & resumable
-│       ├── files/[id]/route.ts       # Hapus file dari Drive
-│       ├── files/[id]/download/      # Unduh/ekspor file dari Drive
-│       ├── folders/route.ts          # Buat folder baru di Drive
-│       └── activity/route.ts         # Baca riwayat log aktivitas
-├── components/
-│   ├── layout/                       # Sidebar, Header, UserMenu, MobileNav
-│   ├── dashboard/                    # StorageOverview, AccountList, RecentFiles, dll.
-│   ├── accounts/                     # AccountsTable, AddAccountButton
-│   ├── files/                        # FilesTable, FilesFilters, FileActions
-│   ├── upload/                       # UploadDialog, UploadButton
-│   └── ui/                           # Primitif shadcn / Base UI
-├── lib/
-│   ├── encryption.ts                 # Enkripsi & dekripsi AES-256-GCM
-│   ├── rate-limit.ts                 # Pembatas laju permintaan in-memory
-│   ├── http.ts                       # Helper withAuth(), ok(), errorResponse()
-│   ├── errors.ts                     # Definisi AppError & ApiErrorCode
-│   ├── quota.ts                      # Sinkronisasi & snapshot kuota
-│   ├── activity.ts                   # Pencatatan log aktivitas sistem
-│   ├── google/                       # OAuth, token management, error mapping, health check
-│   └── google-drive/                 # GoogleDriveService, query builder, file indexer
-├── db/
-│   ├── schema/                       # Skema tabel Drizzle ORM
-│   └── index.ts                      # Koneksi database Postgres
-├── worker/
-│   └── index.ts                      # Background worker (quota sync, health check, indexer)
-└── types/                            # Antarmuka DTO bersama
-```
+Sistem telah melalui audit keamanan berkala dan memenuhi seluruh kriteria:
+
+1. **OAuth 2.0 Tanpa Password**: Tidak pernah meminta atau menyimpan password Google pengguna.
+2. **Enkripsi Kredensial at-rest (AES-256-GCM)**: `access_token` dan `refresh_token` disimpan dalam format ciphertext `v1.<iv>.<tag>.<ciphertext>` dengan key terisolasi.
+3. **Anti-CSRF OAuth Flow**: State cookie menggunakan nonce bertanda waktu dengan flag `httpOnly: true`, `sameSite: 'lax'`, dan divalidasi ketat pada callback.
+4. **Isolasi Data Pengguna Ketat**: Seluruh query dan mutasi data database selalu terikat pada `user_id = currentUser.id`.
+5. **Shared Folder Permission Isolation**: Hak akses `writer` hanya diberikan kepada akun pool yang terdaftar di bawah user yang sama.
+6. **Distributed Rate Limiting (PostgreSQL)**:
+   - Endpoint upload dibatasi maksimal **10 permintaan/menit/user**.
+   - Endpoint mutasi dibatasi maksimal **30 permintaan/menit/user**.
+   - Bekerja secara konsisten pada lingkungan multi-instance server.
+7. **Pembersihan Log**: Tidak ada token, rahasia, atau kredensial yang dicetak pada console log atau tersimpan pada tabel `activity_logs`.
 
 ---
 
-## Catatan Keamanan & Hasil Audit Keamanan
+## 🎯 Acceptance Criteria Phase 4 (PRD §15)
 
-Sesuai dengan ketentuan **PRD §9 (Security)** dan **Global Constraints §2.5**, aplikasi ini menerapkan langkah-langkah keamanan berikut:
+Seluruh 14 kriteria penerimaan Shared Virtual Drive telah selesai dan terverifikasi secara end-to-end:
 
-1. **Enkripsi Kredensial at-rest (AES-256-GCM)**: Seluruh `access_token` dan `refresh_token` disimpan dalam format ciphertext `v1.<iv>.<tag>.<ciphertext>` dengan key terisolasi di environment. Password Google tidak pernah diminta maupun disimpan.
-2. **Kerahasiaan Berkas Environment**: Berkas `.env` dipastikan masuk dalam `.gitignore` dan diabaikan oleh Git.
-3. **Otorisasi Ketat Berbasis Pengguna**: Seluruh query dan mutasi data akun/file selalu difilter berdasarkan `user_id = currentUser.id`. Tidak ada kebocoran data antar-pengguna aplikasi.
-4. **Proteksi Route Terpadu**: Semua route API internal (kecuali endpoint publik autentikasi dan callback OAuth) diwajibkan menggunakan middleware `withAuth`.
-5. **Kebersihan Log**: Tidak ada token OAuth, kunci enkripsi, atau data sensitif yang dicetak ke konsol (`console.log`) maupun database `activity_logs`.
-6. **Proteksi Laju Permintaan (Rate Limiting)**:
-   - Endpoint upload (`POST /api/files/upload`) dibatasi maksimal 10 permintaan/menit/pengguna.
-   - Endpoint mutasi (`POST /api/folders`, `DELETE /api/files/[id]`, `DELETE /api/accounts/[id]`, `POST /api/accounts/refresh`) dibatasi maksimal 30 permintaan/menit/pengguna.
-
-### Hasil Verifikasi Audit Keamanan
-
-```text
-[PASS] 1. Token terenkripsi di PostgreSQL (semua bernilai v1.%)
-[PASS] 2. Berkas .env diabaikan oleh Git (status: ignored)
-[PASS] 3. Route API non-auth seluruhnya terlindungi withAuth
-[PASS] 4. Bebas pencatatan kredensial/token pada konsol/log
-[PASS] 5. Seluruh query database domain terfilter scoped user_id
-[PASS] 6. Rate limiter aktif pada upload (10/min) dan mutasi (30/min)
-```
-
----
-
-## Acceptance Criteria MVP (PRD §14)
-
-Semua kriteria penerimaan MVP telah selesai diimplementasikan, diverifikasi secara menyeluruh, dan berfungsi dengan baik:
-
-- [x] **1. Login ke aplikasi**: Pengguna dapat mendaftar dan masuk menggunakan akun email/password melalui Better Auth.
-- [x] **2. Connect Google Account A**: Pengguna dapat menghubungkan akun Google pertama via OAuth 2.0 consent flow.
-- [x] **3. Connect Google Account B**: Pengguna dapat menghubungkan akun Google kedua secara independen.
-- [x] **4. Melihat quota keduanya**: Halaman Accounts dan Dashboard menampilkan kuota terpakai, kuota bebas, dan total masing-masing akun.
-- [x] **5. Melihat file Account A & B**: Halaman Files menampilkan agregasi berkas dari semua akun terhubung dalam satu daftar.
-- [x] **6. Upload file**: Pengguna dapat memilih dan mengunggah berkas dengan pemantauan progress.
-- [x] **7. Memilih account tujuan**: Modal upload menampilkan daftar akun dengan informasi sisa kuota untuk penempatan file.
-- [x] **8. Download file**: Pengguna dapat mengunduh berkas biner asli maupun berkas Google Docs native (diekspor otomatis ke PDF/Office).
-- [x] **9. Delete file**: Pengguna dapat menghapus berkas permanen dari Drive melalui antarmuka dengan dialog konfirmasi.
-- [x] **10. Disconnect account**: Pengguna dapat mencabut otorisasi dan memutuskan akun Google dari aplikasi kapan saja.
-- [x] **Bonus**:
-  - Dashboard penyimpanan terpadu (Total / Used / Free / Accounts)
-  - Pencarian global lintas akun dari header bar
-  - Pembuatan folder baru di Google Drive
-  - Pemulihan status kesehatan akun (badge & tombol Reconnect)
-  - Pembatasan laju permintaan (Rate Limiting) aktif pada seluruh mutasi
+- [x] **1. User login ke aplikasi**: Autentikasi aman melalui Better Auth dengan email & password.
+- [x] **2. Setup wizard**: Memilih primary account dan membuat folder root terpadu di Google Drive.
+- [x] **3. Tambah 2+ pool accounts**: Pengguna dapat menghubungkan beberapa akun pool secara bertahap.
+- [x] **4. Auto-share folder root ke pool accounts**: Hak akses Editor folder root otomatis dibagikan ke akun pool dan dicatat di `shared_permissions`.
+- [x] **5. Tampilan "My Drive" menunjukkan isi folder root**: File browser menampilkan isi folder root secara terpusat tanpa membedakan kepemilikan akun secara kasat mata.
+- [x] **6. Buat subfolder lewat app**: Subfolder baru selalu dibuat menggunakan akun utama untuk menjamin hierarki dan izin pewarisan.
+- [x] **7. Upload file otomatis**: Algoritma `selectAccount` memilih akun yang memiliki sisa kuota terbesar yang muat menampung berkas.
+- [x] **8. File muncul di folder yang sedang dibuka**: Berkas ter-upload tepat pada folder aktif pengguna (root maupun subfolder).
+- [x] **9. Navigasi folder & breadcrumb**: Navigasi klik folder, breadcrumb interaktif, dan kembali ke direktori induk berfungsi mulus.
+- [x] **10. Download, delete, rename, move, copy**: Berkas dapat diunduh, dihapus, diganti nama, dipindahkan, dan disalin dengan resolved owner account otomatis.
+- [x] **11. Search scoped ke shared root**: Pencarian berkas mencari secara mendalam di dalam struktur folder shared virtual drive.
+- [x] **12. Storage bar total pool capacity**: Bar penyimpanan di sidebar dan storage overview menampilkan kapasitas gabungan seluruh akun pool.
+- [x] **13. Disconnect pool account**: Pemutusan akun mencabut izin Google Drive dari folder root dan membersihkan baris permission.
+- [x] **14. Worker: integrity check, heartbeat, sync**: Worker memantau folder root, melakukan auto-repair permission yang terputus, dan melaporkan status heartbeat real-time ke UI badge.

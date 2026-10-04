@@ -5,13 +5,13 @@ import { logActivity } from '@/lib/activity';
 import { decryptSecret } from '@/lib/encryption';
 import { AppError } from '@/lib/errors';
 import { ok, withAuth } from '@/lib/http';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit } from '@/lib/rate-limit/distributed';
 import { revokeRootFromAccount } from '@/lib/shared-drive/permissions';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export const DELETE = withAuth<Ctx>(async (user, _req, ctx) => {
-  const limit = rateLimit(`mutate:${user.id}`, 30, 60_000);
+  const limit = await rateLimit(`mutate:${user.id}`, 30, 60_000);
   if (!limit.ok)
     throw new AppError('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
   const { id } = await ctx.params;

@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import { cn } from 'cn';
 import { MobileNav } from '@/components/layout/sidebar';
 import { UserMenu } from '@/components/layout/user-menu';
+import { WorkerStatusBadge } from '@/components/layout/worker-status-badge';
 import { Input } from '@/components/ui/input';
 
 interface HeaderProps {
@@ -91,6 +92,7 @@ export function Header({ user }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        <WorkerStatusBadge />
         <UserMenu user={user} />
       </div>
     </header>

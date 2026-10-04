@@ -6,14 +6,14 @@ import { AppError } from '@/lib/errors';
 import { classifyMime } from '@/lib/files/mime';
 import { ok, withAuth } from '@/lib/http';
 import { GoogleDriveService } from '@/lib/google-drive/service';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit } from '@/lib/rate-limit/distributed';
 import { getSetupStatus } from '@/lib/shared-drive/setup';
 import { resolveFileAccount } from '../route';
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export const POST = withAuth<Ctx>(async (user, req, ctx) => {
-  const limit = rateLimit(`mutate:${user.id}`, 30, 60_000);
+  const limit = await rateLimit(`mutate:${user.id}`, 30, 60_000);
   if (!limit.ok)
     throw new AppError('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
   const { id } = await ctx.params;

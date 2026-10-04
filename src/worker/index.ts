@@ -1,12 +1,13 @@
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { googleAccounts, sharedRoots } from '@/db/schema';
+import { googleAccounts, sharedRoots, workerStatus } from '@/db/schema';
 import { syncQuota } from '@/lib/quota';
 import { checkAccountHealth } from '@/lib/google/health';
 import { indexAccountFiles } from '@/lib/google-drive/indexer';
 import { verifyAllSharedRoots } from '@/lib/shared-drive/integrity';
 
+export const HEARTBEAT_INTERVAL_MS = 30_000;
 export const QUOTA_INTERVAL_MS = 10 * 60_000;
 export const HEALTH_INTERVAL_MS = 30 * 60_000;
 export const INDEX_INTERVAL_MS = 60 * 60_000;
@@ -67,8 +68,31 @@ export async function checkIntegrityAll() {
   });
 }
 
+export async function updateHeartbeat() {
+  await safe('heartbeat', async () => {
+    await db
+      .insert(workerStatus)
+      .values({
+        id: 'worker-main',
+        service: 'background-worker',
+        lastHeartbeat: new Date(),
+        status: 'active',
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: workerStatus.id,
+        set: {
+          lastHeartbeat: new Date(),
+          status: 'active',
+          updatedAt: new Date(),
+        },
+      });
+  });
+}
+
 async function startWorker() {
-  console.log('[worker] mulai — quota 10m, health 30m, index 60m, integrity 30m');
+  console.log('[worker] mulai — heartbeat 30s, quota 10m, health 30m, index 60m, integrity 30m');
+  await updateHeartbeat();
   await syncAllQuota();
   await healthAll();
   await checkIntegrityAll();
@@ -78,6 +102,7 @@ async function startWorker() {
     console.log('[worker] selesai (--once mode)');
     process.exit(0);
   } else {
+    setInterval(() => safe('heartbeat loop', updateHeartbeat), HEARTBEAT_INTERVAL_MS);
     setInterval(() => safe('quota loop', syncAllQuota), QUOTA_INTERVAL_MS);
     setInterval(() => safe('health loop', healthAll), HEALTH_INTERVAL_MS);
     setInterval(() => safe('integrity loop', checkIntegrityAll), INTEGRITY_INTERVAL_MS);

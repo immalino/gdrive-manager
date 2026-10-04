@@ -8,13 +8,13 @@ import { getAccountForUser } from '@/lib/google/tokens';
 import { GoogleDriveService } from '@/lib/google-drive/service';
 import { withAuth } from '@/lib/http';
 import { syncQuota } from '@/lib/quota';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit } from '@/lib/rate-limit/distributed';
 import { getSetupStatus } from '@/lib/shared-drive/setup';
 import { isSubfolderOfSharedRoot } from '@/lib/shared-drive/validation';
 import { selectAccount } from '@/lib/upload/select-account';
 
 export const POST = withAuth(async (user, req) => {
-  const limit = rateLimit(`upload:${user.id}`, 10, 60_000);
+  const limit = await rateLimit(`upload:${user.id}`, 10, 60_000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: { code: 'RATE_LIMITED', message: 'Batas 10 upload/menit tercapai.' } },

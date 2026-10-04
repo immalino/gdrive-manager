@@ -50,6 +50,11 @@ vi.mock('@/lib/rate-limit', () => ({
   rateLimit: vi.fn().mockReturnValue({ ok: true }),
 }));
 
+vi.mock('@/lib/rate-limit/distributed', () => ({
+  rateLimit: vi.fn().mockResolvedValue({ ok: true, retryAfterMs: 0 }),
+  distributedRateLimit: vi.fn().mockResolvedValue({ ok: true, retryAfterMs: 0 }),
+}));
+
 const mockPrimaryAccount = {
   id: 'acc-primary',
   userId: 'user-1',

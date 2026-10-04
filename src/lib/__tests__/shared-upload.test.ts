@@ -46,6 +46,11 @@ vi.mock('@/lib/activity', () => ({
   logActivity: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/lib/rate-limit/distributed', () => ({
+  rateLimit: vi.fn().mockResolvedValue({ ok: true, retryAfterMs: 0 }),
+  distributedRateLimit: vi.fn().mockResolvedValue({ ok: true, retryAfterMs: 0 }),
+}));
+
 const mockDbSelect = vi.fn();
 const mockDbInsert = vi.fn();
 const mockDbUpdate = vi.fn();

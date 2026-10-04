@@ -5,13 +5,13 @@ import { logActivity } from '@/lib/activity';
 import { AppError } from '@/lib/errors';
 import { GoogleDriveService } from '@/lib/google-drive/service';
 import { ok, withAuth } from '@/lib/http';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit } from '@/lib/rate-limit/distributed';
 import { runBatchPool } from '@/lib/utils/batch';
 import { getSetupStatus } from '@/lib/shared-drive/setup';
 import type { BulkDeleteItem, BulkDeleteResponse } from '@/types';
 
 export const POST = withAuth(async (user, req) => {
-  const limit = rateLimit(`mutate:${user.id}`, 30, 60_000);
+  const limit = await rateLimit(`mutate:${user.id}`, 30, 60_000);
   if (!limit.ok) {
     throw new AppError('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
   }

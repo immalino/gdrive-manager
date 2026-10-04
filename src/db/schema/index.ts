@@ -6,3 +6,5 @@ export * from './activity-logs';
 export * from './drive-files';
 export * from './shared-roots';
 export * from './shared-permissions';
+export * from './rate-limits';
+export * from './worker-status';

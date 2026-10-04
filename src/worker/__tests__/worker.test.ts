@@ -20,4 +20,9 @@ describe('worker safe runner', () => {
     expect(consoleSpy).toHaveBeenCalledWith('[worker] failing-task gagal', 'boom');
     consoleSpy.mockRestore();
   });
+
+  it('updateHeartbeat dapat dipanggil dan menangani eksekusi dengan aman', async () => {
+    const { updateHeartbeat } = await import('../index');
+    await expect(updateHeartbeat()).resolves.toBeUndefined();
+  });
 });

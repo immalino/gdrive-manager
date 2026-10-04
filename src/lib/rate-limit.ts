@@ -20,3 +20,5 @@ export function rateLimit(
   if (buckets.size > 10_000) buckets.clear();
   return { ok: true, retryAfterMs: 0 };
 }
+
+export const rateLimitInMemory = rateLimit;
