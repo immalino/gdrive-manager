@@ -12,6 +12,7 @@ export const GET = withAuth(async (user) => {
       picture: googleAccounts.picture,
       status: googleAccounts.status,
       role: googleAccounts.role,
+      isUploadEnabled: googleAccounts.isUploadEnabled,
       createdAt: googleAccounts.createdAt,
     })
     .from(googleAccounts)

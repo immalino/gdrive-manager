@@ -49,6 +49,7 @@
 }
 
 :root {
+  color-scheme: light;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.147 0.004 49.25);
   --popover: oklch(1 0 0);
@@ -84,6 +85,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.147 0.004 49.25);
   --foreground: oklch(0.985 0.001 106.423);
   --card: oklch(0.216 0.006 56.043);
@@ -120,11 +122,51 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0 0 0 / 20%) transparent;
   }
+
+  .dark * {
+    scrollbar-color: oklch(1 0 0 / 20%) transparent;
+  }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
+  }
+
+  /* Custom WebKit/Blink Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0 0 0 / 20%);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0 0 0 / 35%);
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: oklch(1 0 0 / 20%);
+    border-radius: 9999px;
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: oklch(1 0 0 / 35%);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }

@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | 'QUOTA_EXCEEDED'
   | 'PERMISSION_DENIED'
   | 'UPLOAD_FAILED'
+  | 'UPLOAD_DISABLED'
   | 'GOOGLE_UNAVAILABLE'
   | 'INTERNAL';
 

@@ -116,10 +116,7 @@ export async function syncGoogleAccountFromAuth(
     const { syncQuota } = await import('@/lib/quota');
     await syncQuota(targetAccount);
   } catch (err) {
-    console.warn(
-      '[auth-sync] Sinkronisasi kuota gagal:',
-      err instanceof Error ? err.message : err,
-    );
+    console.warn('[auth-sync] Sinkronisasi kuota gagal:', err instanceof Error ? err.message : err);
   }
 
   // 5. Jika akun ini adalah primary, pastikan Shared Root diinisialisasi secara otomatis
@@ -148,4 +145,3 @@ export async function syncGoogleAccountFromAuth(
 
   return targetAccount;
 }
-

@@ -27,6 +27,8 @@ export const GET = withAuth(async (user) => {
       name: account.name,
       picture: account.picture,
       status: account.status,
+      role: account.role,
+      isUploadEnabled: account.isUploadEnabled,
       totalBytes: snapshot?.totalBytes ?? null,
       usedBytes: snapshot?.usedBytes ?? 0,
       freeBytes: snapshot?.freeBytes ?? null,

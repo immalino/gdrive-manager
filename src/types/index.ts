@@ -18,6 +18,8 @@ export interface StorageAccountItem {
   name: string | null;
   picture: string | null;
   status: AccountStatus;
+  role?: 'primary' | 'pool';
+  isUploadEnabled: boolean;
   totalBytes: number | null;
   usedBytes: number;
   freeBytes: number | null;

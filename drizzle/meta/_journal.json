@@ -36,6 +36,13 @@
       "when": 1791085863814,
       "tag": "0004_slow_galactus",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791101808136,
+      "tag": "0005_shallow_champions",
+      "breakpoints": true
     }
   ]
 }

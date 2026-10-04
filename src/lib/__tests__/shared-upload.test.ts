@@ -165,12 +165,14 @@ describe('Folder & Upload API in Shared Virtual Drive', () => {
     userId: 'user-1',
     email: 'primary@example.com',
     role: 'primary',
+    isUploadEnabled: true,
   };
   const mockPoolAccount = {
     id: 'acc-pool',
     userId: 'user-1',
     email: 'pool@example.com',
     role: 'pool',
+    isUploadEnabled: true,
   };
   const mockSharedRoot = {
     id: 'root-db-1',
@@ -307,5 +309,50 @@ describe('Folder & Upload API in Shared Virtual Drive', () => {
         parentId: 'valid-sub',
       }),
     );
+  });
+
+  it('POST /api/files/upload menolak mode manual jika akun memiliki isUploadEnabled = false (403 UPLOAD_DISABLED)', async () => {
+    mockGetAccountForUser.mockResolvedValue({
+      ...mockPrimaryAccount,
+      isUploadEnabled: false,
+    });
+
+    const req = new NextRequest(
+      'http://localhost:3000/api/files/upload?filename=test.pdf&mode=manual&accountId=acc-primary',
+      {
+        method: 'POST',
+        body: new Uint8Array([1, 2, 3, 4]),
+        headers: {
+          'Content-Length': '4',
+          'Content-Type': 'application/pdf',
+        },
+      },
+    );
+
+    const res = await uploadPost(req);
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe('UPLOAD_DISABLED');
+  });
+
+  it('POST /api/files/upload mode auto menolak (413 QUOTA_EXCEEDED) jika semua akun isUploadEnabled = false', async () => {
+    mockDbSelect.mockResolvedValue([]); // Tidak ada akun aktif upload yang lolos where query
+
+    const req = new NextRequest(
+      'http://localhost:3000/api/files/upload?filename=test.pdf&mode=auto',
+      {
+        method: 'POST',
+        body: new Uint8Array([1, 2, 3, 4]),
+        headers: {
+          'Content-Length': '4',
+          'Content-Type': 'application/pdf',
+        },
+      },
+    );
+
+    const res = await uploadPost(req);
+    expect(res.status).toBe(413);
+    const body = await res.json();
+    expect(body.error.code).toBe('QUOTA_EXCEEDED');
   });
 });

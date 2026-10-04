@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -100,6 +101,26 @@ export function AccountsTable() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const toggleUploadMutation = useMutation({
+    mutationFn: ({
+      id,
+      isUploadEnabled,
+    }: {
+      id: string;
+      isUploadEnabled: boolean;
+      email: string;
+    }) => api.patch<{ account: StorageAccountItem }>(`/api/accounts/${id}`, { isUploadEnabled }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['storage'] });
+      toast.success(
+        variables.isUploadEnabled
+          ? `Upload diaktifkan untuk ${variables.email}.`
+          : `Upload dinonaktifkan untuk ${variables.email}.`,
+      );
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -143,6 +164,7 @@ export function AccountsTable() {
                     <TableHead className="text-right">Used</TableHead>
                     <TableHead className="text-right">Free</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Upload</TableHead>
                     <TableHead>Diperbarui</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -161,6 +183,9 @@ export function AccountsTable() {
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-5 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-14" />
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-5 w-24" />
@@ -212,6 +237,7 @@ export function AccountsTable() {
                       <TableHead className="text-right">Used</TableHead>
                       <TableHead className="text-right">Free</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Upload</TableHead>
                       <TableHead>Diperbarui</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -254,6 +280,27 @@ export function AccountsTable() {
                           >
                             {STATUS_LABEL[account.status]}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={account.isUploadEnabled}
+                              disabled={
+                                account.status !== 'connected' || toggleUploadMutation.isPending
+                              }
+                              onCheckedChange={(checked) => {
+                                toggleUploadMutation.mutate({
+                                  id: account.id,
+                                  isUploadEnabled: checked,
+                                  email: account.email,
+                                });
+                              }}
+                              aria-label={`Izinkan upload untuk ${account.email}`}
+                            />
+                            <span className="text-xs text-muted-foreground">
+                              {account.isUploadEnabled ? 'Aktif' : 'Nonaktif'}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           {account.updatedAt ? formatDateTime(account.updatedAt) : '—'}

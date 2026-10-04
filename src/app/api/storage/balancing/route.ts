@@ -19,6 +19,7 @@ export const GET = withAuth(async (user) => {
         email: account.email,
         usedBytes: snapshot?.usedBytes ?? 0,
         totalBytes: snapshot?.totalBytes ?? null,
+        isUploadEnabled: account.isUploadEnabled,
       };
     }),
   );

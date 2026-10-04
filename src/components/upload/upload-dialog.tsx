@@ -42,20 +42,26 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
   });
   const accounts = useMemo(() => data?.accounts ?? [], [data]);
   const connected = useMemo(() => accounts.filter((a) => a.status === 'connected'), [accounts]);
-  const storedValid = accountId != null && connected.some((a) => a.id === accountId);
-  const activeAccountId = storedValid ? accountId : (connected[0]?.id ?? null);
+  const storedValid =
+    accountId != null && connected.some((a) => a.id === accountId && a.isUploadEnabled);
+  const activeAccountId = storedValid
+    ? accountId
+    : (connected.find((a) => a.isUploadEnabled)?.id ?? connected[0]?.id ?? null);
   const selectedAccount = accounts.find((a) => a.id === activeAccountId) ?? null;
 
   const totalSize = files.reduce((sum, f) => sum + f.size, 0);
 
+  const manualDisabled = selectedAccount && !selectedAccount.isUploadEnabled;
   const manualTooLarge = files.find(
     (f) => selectedAccount?.freeBytes != null && f.size > selectedAccount.freeBytes,
   );
-  const manualQuotaError =
-    manualTooLarge && selectedAccount
+  const manualQuotaError = manualDisabled
+    ? `Upload dinonaktifkan untuk akun ${selectedAccount.email}. Aktifkan upload pada menu Accounts.`
+    : manualTooLarge && selectedAccount
       ? `File ${manualTooLarge.name} (${formatBytes(manualTooLarge.size)}) melebihi sisa ruang ${selectedAccount.email} (${formatBytes(selectedAccount.freeBytes)}).`
       : null;
 
+  const allConnectedDisabled = connected.length > 0 && connected.every((a) => !a.isUploadEnabled);
   const autoUnfitFile =
     destinationMode === 'auto' && files.length > 0
       ? files.find((f) => !selectAccount(f.size, connected))
@@ -63,16 +69,20 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
   const autoQuotaError =
     destinationMode === 'auto' && files.length > 0 && connected.length === 0
       ? 'Belum ada akun terhubung dengan ruang penyimpanan.'
-      : autoUnfitFile
-        ? `QUOTA_EXCEEDED: Tidak ada akun dengan ruang cukup untuk file ${autoUnfitFile.name} (${formatBytes(autoUnfitFile.size)}).`
-        : null;
+      : destinationMode === 'auto' && files.length > 0 && allConnectedDisabled
+        ? 'Semua akun dinonaktifkan untuk upload. Silakan aktifkan minimal satu akun di menu Accounts.'
+        : autoUnfitFile
+          ? `QUOTA_EXCEEDED: Tidak ada akun dengan ruang cukup untuk file ${autoUnfitFile.name} (${formatBytes(autoUnfitFile.size)}).`
+          : null;
 
   const quotaError = destinationMode === 'auto' ? autoQuotaError : manualQuotaError;
 
   const canUpload = Boolean(
     files.length > 0 &&
     !quotaError &&
-    (destinationMode === 'auto' ? connected.length > 0 : selectedAccount),
+    (destinationMode === 'auto'
+      ? connected.some((a) => a.isUploadEnabled)
+      : selectedAccount && selectedAccount.isUploadEnabled),
   );
 
   function reset() {
@@ -169,7 +179,9 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
                         <div className="space-y-1">
                           {connected.map((account) => {
                             const isEligible =
-                              account.freeBytes != null && account.freeBytes >= file.size;
+                              account.isUploadEnabled &&
+                              account.freeBytes != null &&
+                              account.freeBytes >= file.size;
                             return (
                               <div
                                 key={account.id}
@@ -177,6 +189,11 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
                               >
                                 <span>
                                   {account.email} — Free: {formatBytes(account.freeBytes)}
+                                  {!account.isUploadEnabled && (
+                                    <span className="ml-1 font-normal text-amber-500">
+                                      (Upload dinonaktifkan)
+                                    </span>
+                                  )}
                                 </span>
                                 <span className="font-semibold">{isEligible ? '✅' : '❌'}</span>
                               </div>
@@ -189,7 +206,9 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
                           </p>
                         ) : (
                           <p className="border-t border-border/50 pt-1.5 text-xs font-medium text-destructive">
-                            Tidak ada akun dengan ruang cukup untuk file ini.
+                            {allConnectedDisabled
+                              ? 'Semua akun dinonaktifkan untuk upload.'
+                              : 'Tidak ada akun dengan ruang cukup untuk file ini.'}
                           </p>
                         )}
                       </div>
@@ -267,7 +286,8 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
                         className="gap-2"
                       >
                         {accounts.map((account) => {
-                          const disabled = account.status !== 'connected';
+                          const disabled =
+                            account.status !== 'connected' || !account.isUploadEnabled;
                           const active = activeAccountId === account.id;
                           const insufficient =
                             files.length > 0 &&
@@ -296,6 +316,11 @@ export function UploadDialog({ open, onOpenChange, parentFolderId }: UploadDialo
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-xs font-medium">
                                   {account.email}
+                                  {!account.isUploadEnabled && (
+                                    <span className="ml-1.5 font-normal text-amber-500">
+                                      (Upload dinonaktifkan)
+                                    </span>
+                                  )}
                                 </span>
                                 <span className="block text-[11px] text-muted-foreground">
                                   Free {formatBytes(account.freeBytes)}

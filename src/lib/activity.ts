@@ -4,6 +4,7 @@ import { activityLogs } from '@/db/schema';
 export type ActivityAction =
   | 'account.connect'
   | 'account.disconnect'
+  | 'account.toggle_upload'
   | 'quota.sync'
   | 'file.upload'
   | 'file.download'

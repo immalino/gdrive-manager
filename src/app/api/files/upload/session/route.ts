@@ -79,19 +79,40 @@ export const POST = withAuth(async (user, req) => {
     const accounts = await db
       .select()
       .from(googleAccounts)
-      .where(eq(googleAccounts.userId, user.id));
+      .where(
+        and(
+          eq(googleAccounts.userId, user.id),
+          eq(googleAccounts.status, 'connected'),
+          eq(googleAccounts.isUploadEnabled, true),
+        ),
+      );
     const quotas = await Promise.all(
       accounts.map(async (a) => {
         try {
-          return { id: a.id, email: a.email, quota: await syncQuota(a) };
+          return {
+            id: a.id,
+            email: a.email,
+            isUploadEnabled: a.isUploadEnabled,
+            quota: await syncQuota(a),
+          };
         } catch {
-          return { id: a.id, email: a.email, quota: { freeBytes: null } };
+          return {
+            id: a.id,
+            email: a.email,
+            isUploadEnabled: a.isUploadEnabled,
+            quota: { freeBytes: null },
+          };
         }
       }),
     );
     const picked = selectAccount(
       fileSize,
-      quotas.map((q) => ({ id: q.id, email: q.email, freeBytes: q.quota.freeBytes })),
+      quotas.map((q) => ({
+        id: q.id,
+        email: q.email,
+        freeBytes: q.quota.freeBytes,
+        isUploadEnabled: q.isUploadEnabled,
+      })),
     );
     if (!picked) {
       throw new AppError(
@@ -104,6 +125,10 @@ export const POST = withAuth(async (user, req) => {
   }
 
   const account = await getAccountForUser(user.id, resolvedAccountId!);
+
+  if (!account.isUploadEnabled) {
+    throw new AppError('UPLOAD_DISABLED', `Upload dinonaktifkan untuk akun ${account.email}.`, 403);
+  }
 
   if (mode === 'manual') {
     const quota = await syncQuota(account);

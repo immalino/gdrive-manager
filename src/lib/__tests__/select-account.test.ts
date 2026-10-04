@@ -27,4 +27,30 @@ describe('selectAccount', () => {
     ]);
     expect(result?.id).toBe('B');
   });
+
+  it('akun dengan ruang lebih besar dilewati jika isUploadEnabled = false (skenario user)', () => {
+    const accounts = [
+      { id: 'A', freeBytes: 15 * 1024 ** 3, isUploadEnabled: false },
+      { id: 'B', freeBytes: 2 * 1024 ** 3, isUploadEnabled: true },
+    ];
+    // File 1 GB muat di B dan A, tapi A dinonaktifkan → harus memilih B
+    expect(selectAccount(1 * 1024 ** 3, accounts)?.id).toBe('B');
+  });
+
+  it('jika file muat di akun yang dinonaktifkan tetapi tidak muat di akun aktif → null', () => {
+    const accounts = [
+      { id: 'A', freeBytes: 15 * 1024 ** 3, isUploadEnabled: false },
+      { id: 'B', freeBytes: 2 * 1024 ** 3, isUploadEnabled: true },
+    ];
+    // File 3 GB tidak muat di B (2 GB), dan A dinonaktifkan → null
+    expect(selectAccount(3 * 1024 ** 3, accounts)).toBeNull();
+  });
+
+  it('jika semua akun isUploadEnabled = false → null', () => {
+    const accounts = [
+      { id: 'A', freeBytes: 10 * 1024 ** 3, isUploadEnabled: false },
+      { id: 'B', freeBytes: 10 * 1024 ** 3, isUploadEnabled: false },
+    ];
+    expect(selectAccount(100, accounts)).toBeNull();
+  });
 });

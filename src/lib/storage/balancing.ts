@@ -5,6 +5,7 @@ export interface StorageAccountInput {
   email: string;
   usedBytes: number;
   totalBytes: number | null;
+  isUploadEnabled?: boolean;
 }
 
 export interface SharedFileInput {
@@ -24,6 +25,7 @@ export interface AccountStorageMetric {
   freeBytes: number;
   usageRatio: number; // 0 to 1
   usagePercentage: number; // 0 to 100
+  isUploadEnabled?: boolean;
 }
 
 export interface StorageImbalanceResult {
@@ -63,6 +65,7 @@ export function calculateStorageImbalance(accounts: StorageAccountInput[]): Stor
         freeBytes: Math.max(total - a.usedBytes, 0),
         usageRatio,
         usagePercentage: Math.round(usageRatio * 100),
+        isUploadEnabled: a.isUploadEnabled !== false,
       };
     });
 
@@ -85,6 +88,7 @@ export function calculateStorageImbalance(accounts: StorageAccountInput[]): Stor
       freeBytes: Math.max(total - a.usedBytes, 0),
       usageRatio,
       usagePercentage: Math.round(usageRatio * 100),
+      isUploadEnabled: a.isUploadEnabled !== false,
     };
   });
 
@@ -134,7 +138,7 @@ export function getBalancingRecommendations(
       .sort((a, b) => b.usageRatio - a.usageRatio);
 
     const targets = simulatedAccounts
-      .filter((a) => a.usageRatio < avg - 0.05)
+      .filter((a) => a.isUploadEnabled !== false && a.usageRatio < avg - 0.05)
       .sort((a, b) => a.usageRatio - b.usageRatio);
 
     if (sources.length === 0 || targets.length === 0) break;

@@ -1,0 +1,1 @@
+ALTER TABLE "google_accounts" ADD COLUMN "is_upload_enabled" boolean DEFAULT true NOT NULL;

@@ -90,6 +90,7 @@ const primaryAccount: GoogleAccount = {
   tokenExpiresAt: new Date(Date.now() + 3600_000),
   status: 'connected',
   role: 'primary',
+  isUploadEnabled: true,
   createdAt: new Date(),
   updatedAt: new Date(),
 };
@@ -106,6 +107,7 @@ const poolAccount: GoogleAccount = {
   tokenExpiresAt: new Date(Date.now() + 3600_000),
   status: 'connected',
   role: 'pool',
+  isUploadEnabled: true,
   createdAt: new Date(),
   updatedAt: new Date(),
 };

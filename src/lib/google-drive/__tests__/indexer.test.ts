@@ -53,6 +53,7 @@ const testAccount = {
   tokenExpiresAt: new Date(Date.now() + 3600_000),
   status: 'connected',
   role: 'pool',
+  isUploadEnabled: true,
   createdAt: new Date(),
   updatedAt: new Date(),
 } satisfies GoogleAccount;

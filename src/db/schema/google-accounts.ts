@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { randomUUID } from 'node:crypto';
 import { user } from './auth';
 
@@ -24,6 +24,7 @@ export const googleAccounts = pgTable(
     role: text('role', { enum: ['primary', 'pool'] })
       .notNull()
       .default('pool'),
+    isUploadEnabled: boolean('is_upload_enabled').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -76,3 +76,35 @@ export const DELETE = withAuth<Ctx>(async (user, _req, ctx) => {
   });
   return ok({ deleted: true });
 });
+
+export const PATCH = withAuth<Ctx>(async (user, req, ctx) => {
+  const limit = await rateLimit(`mutate:${user.id}`, 30, 60_000);
+  if (!limit.ok)
+    throw new AppError('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
+  const { id } = await ctx.params;
+  const body = (await req.json().catch(() => null)) as { isUploadEnabled?: boolean } | null;
+  if (!body || typeof body.isUploadEnabled !== 'boolean') {
+    throw new AppError('VALIDATION', 'isUploadEnabled (boolean) wajib disertakan.', 400);
+  }
+
+  const [existing] = await db
+    .select()
+    .from(googleAccounts)
+    .where(and(eq(googleAccounts.id, id), eq(googleAccounts.userId, user.id)));
+  if (!existing) throw new AppError('NOT_FOUND', 'Akun tidak ditemukan.', 404);
+
+  const [updated] = await db
+    .update(googleAccounts)
+    .set({ isUploadEnabled: body.isUploadEnabled, updatedAt: new Date() })
+    .where(and(eq(googleAccounts.id, id), eq(googleAccounts.userId, user.id)))
+    .returning();
+
+  await logActivity({
+    userId: user.id,
+    googleAccountId: id,
+    action: 'account.toggle_upload',
+    metadata: { email: existing.email, isUploadEnabled: body.isUploadEnabled },
+  });
+
+  return ok({ account: updated });
+});

@@ -31,6 +31,13 @@ export async function migrateFile(params: MigrateFileParams): Promise<MigrateFil
   if (!targetAccount || targetAccount.status !== 'connected') {
     throw new AppError('NOT_FOUND', 'Akun target tidak ditemukan atau tidak terhubung.', 404);
   }
+  if (!targetAccount.isUploadEnabled) {
+    throw new AppError(
+      'UPLOAD_DISABLED',
+      'Akun target dinonaktifkan untuk penambahan berkas.',
+      400,
+    );
+  }
 
   // 2. Dapatkan akun sumber
   let sourceAccountId = params.sourceAccountId;
