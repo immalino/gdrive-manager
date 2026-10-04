@@ -184,7 +184,11 @@ export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview
   const downloadHref = `/api/files/${encodeURIComponent(file.id)}/download?accountId=${encodeURIComponent(file.accountId)}`;
 
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div
+      className="flex items-center justify-end gap-1"
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+    >
       {/* Quick Actions */}
       {!isFolder && onPreview && (
         <Button

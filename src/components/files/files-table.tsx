@@ -617,6 +617,11 @@ export function FilesTable({
                     {row.getAllCells().map((cell) => (
                       <TableCell
                         key={cell.id}
+                        onClick={
+                          cell.column.id === 'actions' || cell.column.id === 'select'
+                            ? (e) => e.stopPropagation()
+                            : undefined
+                        }
                         className={
                           cell.column.id === 'select'
                             ? 'w-10 px-2 text-center'
