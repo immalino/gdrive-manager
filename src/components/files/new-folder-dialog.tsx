@@ -17,15 +17,31 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api-client';
 
-export interface NewFolderButtonProps {
+export interface NewFolderDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   parentFolderId?: string;
 }
 
-export function NewFolderButton({ parentFolderId }: NewFolderButtonProps = {}) {
+export function NewFolderDialog({
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  parentFolderId,
+}: NewFolderDialogProps) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [name, setName] = useState('');
   const [submitted, setSubmitted] = useState(false);
+
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (isControlled) {
+      controlledOnOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
 
   const nameError = submitted && !name.trim() ? 'Nama folder wajib diisi.' : null;
 
@@ -41,10 +57,10 @@ export function NewFolderButton({ parentFolderId }: NewFolderButtonProps = {}) {
   });
 
   function handleClose() {
-    setOpen(false);
     setName('');
     setSubmitted(false);
     createMutation.reset();
+    setOpen(false);
   }
 
   function handleSubmit() {
@@ -54,52 +70,58 @@ export function NewFolderButton({ parentFolderId }: NewFolderButtonProps = {}) {
   }
 
   return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) handleClose();
+        else setOpen(true);
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Buat folder baru</DialogTitle>
+          <DialogDescription>Folder dibuat di shared drive oleh akun utama.</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="new-folder-name">Nama folder</Label>
+            <Input
+              id="new-folder-name"
+              value={name}
+              placeholder="Mis. Documents"
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSubmit();
+              }}
+            />
+            {nameError && <p className="text-sm font-medium text-destructive">{nameError}</p>}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleClose}>
+            Batal
+          </Button>
+          <Button disabled={createMutation.isPending} onClick={handleSubmit}>
+            {createMutation.isPending ? 'Membuat...' : 'Buat Folder'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function NewFolderButton({ parentFolderId }: { parentFolderId?: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
         <FolderPlus />
         New Folder
       </Button>
-
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          if (!next) handleClose();
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Buat folder baru</DialogTitle>
-            <DialogDescription>Folder dibuat di shared drive oleh akun utama.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-folder-name">Nama folder</Label>
-              <Input
-                id="new-folder-name"
-                value={name}
-                placeholder="Mis. Documents"
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSubmit();
-                }}
-              />
-              {nameError && <p className="text-sm font-medium text-destructive">{nameError}</p>}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={handleClose}>
-              Batal
-            </Button>
-            <Button disabled={createMutation.isPending} onClick={handleSubmit}>
-              {createMutation.isPending ? 'Membuat...' : 'Buat Folder'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <NewFolderDialog open={open} onOpenChange={setOpen} parentFolderId={parentFolderId} />
     </>
   );
 }
-
-export { NewFolderButton as NewFolderDialog };

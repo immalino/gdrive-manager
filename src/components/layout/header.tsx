@@ -1,16 +1,13 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, RefreshCw, Search } from 'lucide-react';
-import { toast } from 'sonner';
+import { Search } from 'lucide-react';
+import { cn } from 'cn';
 import { MobileNav } from '@/components/layout/sidebar';
 import { UserMenu } from '@/components/layout/user-menu';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { UploadButton } from '@/components/upload/upload-dialog';
-import { api } from '@/lib/api-client';
 
 interface HeaderProps {
   user: { name: string; email: string };
@@ -19,6 +16,7 @@ interface HeaderProps {
 function HeaderSearch({ defaultSearch }: { defaultSearch: string }) {
   const router = useRouter();
   const [value, setValue] = useState(defaultSearch);
+  const [focused, setFocused] = useState(false);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,13 +29,21 @@ function HeaderSearch({ defaultSearch }: { defaultSearch: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="relative w-full max-w-xs">
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+    <form
+      onSubmit={onSubmit}
+      className={cn(
+        'relative w-full transition-all duration-200 ease-in-out',
+        focused ? 'max-w-xl' : 'max-w-md',
+      )}
+    >
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Search files..."
-        className="pl-8"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder="Search in Drive..."
+        className="pl-9 h-9 w-full bg-muted/40 hover:bg-muted/60 focus:bg-background transition-colors border-muted focus:border-ring rounded-lg text-sm"
         aria-label="Search files"
       />
     </form>
@@ -51,51 +57,40 @@ function HeaderSearchContainer() {
 }
 
 export function Header({ user }: HeaderProps) {
-  const queryClient = useQueryClient();
-  const refreshMutation = useMutation({
-    mutationFn: () => api.post<{ synced: number }>('/api/accounts/refresh'),
-    onSuccess: ({ synced }) => {
-      queryClient.invalidateQueries({ queryKey: ['storage'] });
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-      queryClient.invalidateQueries({ queryKey: ['activity'] });
-      toast.success(`Quota disinkronkan untuk ${synced} akun.`);
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4 md:px-6">
-      <MobileNav />
-      <Suspense
-        fallback={
-          <div className="relative w-full max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              disabled
-              placeholder="Search files..."
-              className="pl-8"
-              aria-label="Search files"
-            />
-          </div>
-        }
-      >
-        <HeaderSearchContainer />
-      </Suspense>
-      <div className="ml-auto flex items-center gap-2">
-        <UploadButton />
-        <Button
-          variant="outline"
-          disabled={refreshMutation.isPending}
-          onClick={() => refreshMutation.mutate()}
-          aria-label="Refresh quota Google Accounts"
+    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border px-4 md:px-6 bg-background/95 backdrop-blur">
+      <div className="flex items-center gap-3 shrink-0">
+        <MobileNav />
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 text-sm font-semibold tracking-tight hover:opacity-85 transition-opacity"
         >
-          <RefreshCw className={refreshMutation.isPending ? 'animate-spin' : undefined} />
-          <span className="hidden sm:inline">Refresh</span>
-        </Button>
-        <Button render={<a href="/api/google/connect" />}>
-          <Plus />
-          <span className="hidden sm:inline">Add Account</span>
-        </Button>
+          <span aria-hidden="true" className="text-base">
+            ☁
+          </span>
+          <span>GDrive Pool</span>
+        </Link>
+      </div>
+
+      <div className="flex-1 flex justify-center max-w-xl mx-2">
+        <Suspense
+          fallback={
+            <div className="relative w-full max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                disabled
+                placeholder="Search in Drive..."
+                className="pl-9 h-9 w-full bg-muted/40 border-muted rounded-lg text-sm"
+                aria-label="Search files"
+              />
+            </div>
+          }
+        >
+          <HeaderSearchContainer />
+        </Suspense>
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
         <UserMenu user={user} />
       </div>
     </header>

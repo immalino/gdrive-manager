@@ -39,6 +39,9 @@ export const GET = withAuth(async (user, req) => {
   let modifiedAfter: string | undefined;
   let modifiedBefore: string | undefined;
 
+  const limitParam = sp.get('limit');
+  const recentLimit = limitParam ? Math.max(1, Math.min(100, Number(limitParam))) : 8;
+
   if (!recent) {
     const sizeMinRaw = sp.get('sizeMin');
     if (sizeMinRaw !== null && sizeMinRaw !== '') {
@@ -57,16 +60,18 @@ export const GET = withAuth(async (user, req) => {
       }
       sizeMax = val;
     }
+  }
 
-    const modifiedAfterRaw = sp.get('modifiedAfter');
-    if (modifiedAfterRaw !== null && modifiedAfterRaw !== '') {
-      const d = new Date(modifiedAfterRaw);
-      if (isNaN(d.getTime())) {
-        throw new AppError('VALIDATION', 'Tanggal modifiedAfter tidak valid.', 400);
-      }
-      modifiedAfter = modifiedAfterRaw;
+  const modifiedAfterRaw = sp.get('modifiedAfter');
+  if (modifiedAfterRaw !== null && modifiedAfterRaw !== '') {
+    const d = new Date(modifiedAfterRaw);
+    if (isNaN(d.getTime())) {
+      throw new AppError('VALIDATION', 'Tanggal modifiedAfter tidak valid.', 400);
     }
+    modifiedAfter = modifiedAfterRaw;
+  }
 
+  if (!recent) {
     const modifiedBeforeRaw = sp.get('modifiedBefore');
     if (modifiedBeforeRaw !== null && modifiedBeforeRaw !== '') {
       const d = new Date(modifiedBeforeRaw);
@@ -183,7 +188,7 @@ export const GET = withAuth(async (user, req) => {
         modifiedAfter,
         modifiedBefore,
       });
-      const pageSize = recent ? 8 : MAX_PER_ACCOUNT;
+      const pageSize = recent ? recentLimit : MAX_PER_ACCOUNT;
       const results = await Promise.allSettled(
         targets.map(async (account) => {
           const service = await GoogleDriveService.forAccount(account);
@@ -260,7 +265,7 @@ export const GET = withAuth(async (user, req) => {
       modifiedAfter,
       modifiedBefore,
     });
-    const pageSize = recent ? 8 : MAX_PER_ACCOUNT;
+    const pageSize = recent ? recentLimit : MAX_PER_ACCOUNT;
     const results = await Promise.allSettled(
       targets.map(async (account) => {
         const service = await GoogleDriveService.forAccount(account);
@@ -363,7 +368,7 @@ export const GET = withAuth(async (user, req) => {
 
   const sorted = sortFiles(files, sort, dir);
   return ok({
-    files: recent ? sorted.slice(0, 8) : sorted,
+    files: recent ? sorted.slice(0, recentLimit) : sorted,
     failedAccounts,
     currentFolder,
     breadcrumb,

@@ -38,11 +38,13 @@ import { formatBytes, formatDateTime } from '@/lib/format';
 import type { DriveFileDto } from '@/lib/google-drive/types';
 import type { BreadcrumbItem, FilesResponse, StorageAccountItem, StorageResponse } from '@/types';
 import { Breadcrumb } from '@/components/file-browser/breadcrumb';
+import { Toolbar } from '@/components/file-browser/toolbar';
+import { FileGrid } from '@/components/file-browser/file-grid';
 import { BulkActionBar } from './bulk-action-bar';
 import { FileActions } from './file-actions';
 import { FilesFilters } from './files-filters';
-import { NewFolderButton } from './new-folder-dialog';
 import { PreviewDialog } from './preview-dialog';
+import { useViewModePreference } from '@/lib/view-mode';
 
 const EMPTY_FILES: DriveFileDto[] = [];
 const EMPTY_ACCOUNTS: StorageAccountItem[] = [];
@@ -113,12 +115,16 @@ export function FilesTable({
   onNavigateFolder,
   onBreadcrumbLoaded,
   showAccountColumn = false,
+  viewMode: propViewMode,
+  onViewModeChange,
 }: {
   initial?: Partial<FilesInitialFilters>;
   folderId?: string;
   onNavigateFolder?: (folderId: string) => void;
   onBreadcrumbLoaded?: (items: BreadcrumbItem[]) => void;
   showAccountColumn?: boolean;
+  viewMode?: 'list' | 'grid';
+  onViewModeChange?: (mode: 'list' | 'grid') => void;
 }) {
   const searchParams = useSearchParams();
   const urlSearch = searchParams.get('search') ?? '';
@@ -139,6 +145,18 @@ export function FilesTable({
   const [sizeMax, setSizeMax] = useState<number | undefined>(initial?.sizeMax);
   const [modifiedAfter, setModifiedAfter] = useState<string | undefined>(initial?.modifiedAfter);
   const [modifiedBefore, setModifiedBefore] = useState<string | undefined>(initial?.modifiedBefore);
+
+  const [preferredViewMode, setPreferredViewMode] = useViewModePreference();
+  const viewMode = propViewMode ?? preferredViewMode;
+  const [showFilters, setShowFilters] = useState(true);
+
+  const handleViewModeChange = (mode: 'list' | 'grid') => {
+    if (onViewModeChange) {
+      onViewModeChange(mode);
+    } else {
+      setPreferredViewMode(mode);
+    }
+  };
 
   const [previewFile, setPreviewFile] = useState<DriveFileDto | null>(null);
 
@@ -416,15 +434,60 @@ export function FilesTable({
     setAccountId('all');
   };
 
+  const activeFilterCount =
+    (kind !== 'all' ? 1 : 0) +
+    (sizeMin != null ? 1 : 0) +
+    (sizeMax != null ? 1 : 0) +
+    (modifiedAfter ? 1 : 0) +
+    (modifiedBefore ? 1 : 0);
+
+  const selectedRowIds = useMemo(() => new Set(Object.keys(rowSelection)), [rowSelection]);
+
+  const handleGridSelect = (file: DriveFileDto, isMulti: boolean) => {
+    const rowId = `${file.accountId}:${file.id}`;
+    if (isMulti) {
+      setRowSelection((prev) => {
+        const next = { ...prev };
+        if (next[rowId]) {
+          delete next[rowId];
+        } else {
+          next[rowId] = true;
+        }
+        return next;
+      });
+    } else {
+      setRowSelection((prev) => {
+        if (prev[rowId] && Object.keys(prev).length === 1) {
+          return {};
+        }
+        return { [rowId]: true };
+      });
+    }
+  };
+
   return (
-    <div className="flex flex-1 flex-col min-h-0 space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between shrink-0">
-        <div className="min-w-0 flex-1">
-          {!onBreadcrumbLoaded && data?.breadcrumb && (
-            <div className="mb-3">
-              <Breadcrumb items={data.breadcrumb} onNavigate={handleFolderClick} />
-            </div>
-          )}
+    <div className="flex flex-1 flex-col min-h-0 space-y-3">
+      {!onBreadcrumbLoaded && data?.breadcrumb && (
+        <div className="shrink-0">
+          <Breadcrumb items={data.breadcrumb} onNavigate={handleFolderClick} />
+        </div>
+      )}
+
+      <Toolbar
+        parentFolderId={folderId}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        sort={sort}
+        onSortChange={setSort}
+        dir={dir}
+        onDirChange={setDir}
+        showFilters={showFilters}
+        onToggleFilters={() => setShowFilters((prev) => !prev)}
+        activeFilterCount={activeFilterCount}
+      />
+
+      {showFilters && (
+        <div className="shrink-0">
           <FilesFilters
             searchInput={searchInput}
             onSearchChange={setSearchInput}
@@ -450,8 +513,7 @@ export function FilesTable({
             accounts={storage?.accounts ?? EMPTY_ACCOUNTS}
           />
         </div>
-        <NewFolderButton parentFolderId={folderId} />
-      </div>
+      )}
 
       {failedAccounts.length > 0 && (
         <Alert variant="destructive" className="shrink-0">
@@ -475,104 +537,125 @@ export function FilesTable({
         </Alert>
       )}
 
-      <Table containerClassName="flex-1 min-h-0 overflow-auto rounded-md border bg-card">
-        <TableHeader className="sticky top-0 z-10 bg-card border-b">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className="bg-card hover:bg-card">
-              {headerGroup.headers.map((header) => (
-                <TableHead
-                  key={header.id}
-                  className={cn(
-                    'bg-card',
-                    header.column.id === 'select'
-                      ? 'w-10 px-2'
-                      : header.column.id === 'name'
-                        ? 'w-[45%]'
-                        : header.column.id === 'actions'
-                          ? 'text-right'
-                          : undefined,
-                  )}
+      {viewMode === 'list' ? (
+        <Table containerClassName="flex-1 min-h-0 overflow-auto rounded-md border bg-card">
+          <TableHeader className="sticky top-0 z-10 bg-card border-b">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id} className="bg-card hover:bg-card">
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className={cn(
+                      'bg-card',
+                      header.column.id === 'select'
+                        ? 'w-10 px-2'
+                        : header.column.id === 'name'
+                          ? 'w-[45%]'
+                          : header.column.id === 'actions'
+                            ? 'text-right'
+                            : undefined,
+                    )}
+                  >
+                    {header.isPlaceholder ? null : <table.FlexRender header={header} />}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {isPending ? (
+              Array.from({ length: SKELETON_ROWS }).map((_, i) => (
+                <TableRow key={`skeleton-${i}`}>
+                  <TableCell className="w-10 px-2 text-center">
+                    <Skeleton className="h-4 w-4 mx-auto" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-2/3" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-16" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-32" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-4 w-28" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="ml-auto h-4 w-16" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : table.getRowModel().rows.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-32 text-center text-sm text-muted-foreground"
                 >
-                  {header.isPlaceholder ? null : <table.FlexRender header={header} />}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {isPending ? (
-            Array.from({ length: SKELETON_ROWS }).map((_, i) => (
-              <TableRow key={`skeleton-${i}`}>
-                <TableCell className="w-10 px-2 text-center">
-                  <Skeleton className="h-4 w-4 mx-auto" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-2/3" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-16" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-32" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="h-4 w-28" />
-                </TableCell>
-                <TableCell>
-                  <Skeleton className="ml-auto h-4 w-16" />
+                  Empty folder
                 </TableCell>
               </TableRow>
-            ))
-          ) : table.getRowModel().rows.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={columns.length}
-                className="h-32 text-center text-sm text-muted-foreground"
-              >
-                Empty folder
-              </TableCell>
-            </TableRow>
-          ) : (
-            table.getRowModel().rows.map((row) => {
-              const isFolder = row.original.mimeType === 'application/vnd.google-apps.folder';
-              return (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() ? 'selected' : undefined}
-                  onClick={() => {
-                    if (isFolder) {
-                      handleFolderClick(row.original.id);
-                    }
-                  }}
-                  onDoubleClick={() => {
-                    if (!isFolder) {
-                      setPreviewFile(row.original);
-                    }
-                  }}
-                  className="cursor-pointer hover:bg-muted/50"
-                >
-                  {row.getAllCells().map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      className={
-                        cell.column.id === 'select'
-                          ? 'w-10 px-2 text-center'
-                          : cell.column.id === 'actions'
-                            ? 'text-right'
-                            : cell.column.id === 'name'
-                              ? 'max-w-0'
-                              : undefined
+            ) : (
+              table.getRowModel().rows.map((row) => {
+                const isFolder = row.original.mimeType === 'application/vnd.google-apps.folder';
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() ? 'selected' : undefined}
+                    onClick={() => {
+                      if (isFolder) {
+                        handleFolderClick(row.original.id);
                       }
-                    >
-                      <table.FlexRender cell={cell} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              );
-            })
+                    }}
+                    onDoubleClick={() => {
+                      if (!isFolder) {
+                        setPreviewFile(row.original);
+                      }
+                    }}
+                    className="cursor-pointer hover:bg-muted/50"
+                  >
+                    {row.getAllCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        className={
+                          cell.column.id === 'select'
+                            ? 'w-10 px-2 text-center'
+                            : cell.column.id === 'actions'
+                              ? 'text-right'
+                              : cell.column.id === 'name'
+                                ? 'max-w-0'
+                                : undefined
+                        }
+                      >
+                        <table.FlexRender cell={cell} />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      ) : (
+        <FileGrid
+          files={data?.files ?? EMPTY_FILES}
+          isLoading={isPending}
+          selectedIds={selectedRowIds}
+          onSelect={handleGridSelect}
+          onNavigateFolder={handleFolderClick}
+          onPreview={(file: DriveFileDto) => setPreviewFile(file)}
+          renderActions={(file: DriveFileDto) => (
+            <FileActions
+              file={file}
+              onPreview={
+                file.mimeType !== 'application/vnd.google-apps.folder'
+                  ? () => setPreviewFile(file)
+                  : undefined
+              }
+            />
           )}
-        </TableBody>
-      </Table>
+        />
+      )}
 
       <PreviewDialog
         file={previewFile}
