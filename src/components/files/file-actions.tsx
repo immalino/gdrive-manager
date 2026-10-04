@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowRightLeft,
   Copy,
   Download,
   ExternalLink,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { MigrateFileDialog } from './migrate-file-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,6 +77,7 @@ export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview
   const [folderFilter, setFolderFilter] = useState('');
 
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
 
   // Folder query untuk picker Move & Copy
   const { data: foldersData, isLoading: foldersLoading } = useQuery({
@@ -267,6 +270,13 @@ export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview
             >
               <Copy />
               <span>Copy</span>
+            </DropdownMenuItem>
+          )}
+
+          {!isFolder && (
+            <DropdownMenuItem onClick={() => setMigrateOpen(true)}>
+              <ArrowRightLeft />
+              <span>Migrate</span>
             </DropdownMenuItem>
           )}
 
@@ -505,6 +515,11 @@ export function FileActions({ file, onPreview }: { file: DriveFileDto; onPreview
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Migrate File Dialog */}
+      {!isFolder && (
+        <MigrateFileDialog open={migrateOpen} onOpenChange={setMigrateOpen} file={file} />
+      )}
     </div>
   );
 }

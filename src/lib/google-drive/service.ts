@@ -442,6 +442,18 @@ export class GoogleDriveService {
     return data.id;
   }
 
+  async listPermissions(
+    folderId: string,
+  ): Promise<Array<{ id: string; emailAddress?: string; role: string; type: string }>> {
+    const res = await this.request(
+      `/files/${encodeURIComponent(folderId)}/permissions?fields=permissions(id,emailAddress,role,type)`,
+    );
+    const body = (await res.json()) as {
+      permissions?: Array<{ id: string; emailAddress?: string; role: string; type: string }>;
+    };
+    return body.permissions ?? [];
+  }
+
   async revokePermission(folderId: string, permissionId: string): Promise<void> {
     await this.request(`/files/${folderId}/permissions/${permissionId}`, {
       method: 'DELETE',

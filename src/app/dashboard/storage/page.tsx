@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { AccountList } from '@/components/dashboard/account-list';
 import { StorageOverview } from '@/components/dashboard/storage-overview';
 import { StatsCharts } from '@/components/stats/stats-charts';
+import { StorageBalancingCard } from '@/components/stats/storage-balancing-card';
 import { api, ApiError } from '@/lib/api-client';
 import type { StatsResponse, StorageResponse } from '@/types';
 
@@ -45,6 +46,7 @@ export default function StoragePage() {
     mutationFn: () => api.post<{ synced: number }>('/api/accounts/refresh'),
     onSuccess: ({ synced }) => {
       queryClient.invalidateQueries({ queryKey: ['storage'] });
+      queryClient.invalidateQueries({ queryKey: ['storage-balancing'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
       toast.success(`Quota disinkronkan untuk ${synced} akun.`);
     },
@@ -97,6 +99,9 @@ export default function StoragePage() {
         <h2 className="text-sm font-semibold tracking-tight">Accounts Breakdown</h2>
         <AccountList accounts={storage?.accounts} isLoading={storagePending} />
       </div>
+
+      {/* Storage balancing & recommendations */}
+      <StorageBalancingCard />
 
       {/* Visual storage analytics charts */}
       <div className="space-y-3 pt-2">

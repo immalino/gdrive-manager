@@ -135,3 +135,28 @@ export interface BulkMoveResponse {
   failedCount: number;
   errors: Array<{ id: string; error?: string }>;
 }
+
+export interface BalancingResponse {
+  score: number;
+  isImbalanced: boolean;
+  averageUsageRatio: number;
+  accounts: Array<{
+    id: string;
+    email: string;
+    usedBytes: number;
+    totalBytes: number;
+    freeBytes: number;
+    usageRatio: number;
+    usagePercentage: number;
+  }>;
+  recommendations: Array<{
+    fileId: string;
+    fileName: string;
+    sizeBytes: number;
+    sourceAccountId: string;
+    sourceAccountEmail: string;
+    targetAccountId: string;
+    targetAccountEmail: string;
+    reason: string;
+  }>;
+}

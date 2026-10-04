@@ -5,10 +5,12 @@ import { googleAccounts, sharedRoots } from '@/db/schema';
 import { syncQuota } from '@/lib/quota';
 import { checkAccountHealth } from '@/lib/google/health';
 import { indexAccountFiles } from '@/lib/google-drive/indexer';
+import { verifyAllSharedRoots } from '@/lib/shared-drive/integrity';
 
 export const QUOTA_INTERVAL_MS = 10 * 60_000;
 export const HEALTH_INTERVAL_MS = 30 * 60_000;
 export const INDEX_INTERVAL_MS = 60 * 60_000;
+export const INTEGRITY_INTERVAL_MS = 30 * 60_000;
 
 export async function safe(label: string, fn: () => Promise<void>) {
   try {
@@ -58,10 +60,18 @@ export async function indexAll() {
   }
 }
 
+export async function checkIntegrityAll() {
+  await safe('sharedRootIntegrity', async () => {
+    const results = await verifyAllSharedRoots();
+    console.log(`[worker] shared root integrity check selesai (${results.length} roots diperiksa)`);
+  });
+}
+
 async function startWorker() {
-  console.log('[worker] mulai — quota 10m, health 30m, index 60m');
+  console.log('[worker] mulai — quota 10m, health 30m, index 60m, integrity 30m');
   await syncAllQuota();
   await healthAll();
+  await checkIntegrityAll();
   await indexAll();
 
   if (process.argv.includes('--once')) {
@@ -70,6 +80,7 @@ async function startWorker() {
   } else {
     setInterval(() => safe('quota loop', syncAllQuota), QUOTA_INTERVAL_MS);
     setInterval(() => safe('health loop', healthAll), HEALTH_INTERVAL_MS);
+    setInterval(() => safe('integrity loop', checkIntegrityAll), INTEGRITY_INTERVAL_MS);
     setInterval(() => safe('index loop', indexAll), INDEX_INTERVAL_MS);
   }
 }

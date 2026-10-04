@@ -1,11 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { googleAccounts } from '@/db/schema';
+import { googleAccounts, sharedPermissions, sharedRoots } from '@/db/schema';
 import { logActivity } from '@/lib/activity';
 import { decryptSecret } from '@/lib/encryption';
 import { AppError } from '@/lib/errors';
 import { ok, withAuth } from '@/lib/http';
 import { rateLimit } from '@/lib/rate-limit';
+import { revokeRootFromAccount } from '@/lib/shared-drive/permissions';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -19,6 +20,42 @@ export const DELETE = withAuth<Ctx>(async (user, _req, ctx) => {
     .from(googleAccounts)
     .where(and(eq(googleAccounts.id, id), eq(googleAccounts.userId, user.id)));
   if (!row) throw new AppError('NOT_FOUND', 'Akun tidak ditemukan.', 404);
+
+  // Jika akun ini adalah pool account, cabut permission dari folder root & hapus dari shared_permissions
+  try {
+    const sharedRoot = await db.query.sharedRoots.findFirst({
+      where: eq(sharedRoots.userId, user.id),
+    });
+
+    if (sharedRoot && sharedRoot.primaryAccountId !== row.id) {
+      const primaryAccount = await db.query.googleAccounts.findFirst({
+        where: and(
+          eq(googleAccounts.id, sharedRoot.primaryAccountId),
+          eq(googleAccounts.userId, user.id),
+        ),
+      });
+
+      if (primaryAccount) {
+        await revokeRootFromAccount(
+          sharedRoot.id,
+          sharedRoot.driveFolderId,
+          primaryAccount,
+          row.id,
+        );
+      }
+
+      await db
+        .delete(sharedPermissions)
+        .where(
+          and(
+            eq(sharedPermissions.sharedRootId, sharedRoot.id),
+            eq(sharedPermissions.googleAccountId, row.id),
+          ),
+        );
+    }
+  } catch (err) {
+    console.warn('[account.delete] gagal revoke root permission:', err);
+  }
 
   try {
     const refreshToken = decryptSecret(row.refreshTokenEncrypted);

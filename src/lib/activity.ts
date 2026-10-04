@@ -13,7 +13,11 @@ export type ActivityAction =
   | 'file.move'
   | 'file.copy'
   | 'setup.init'
-  | 'setup.share';
+  | 'setup.share'
+  | 'root.integrity_checked'
+  | 'root.reshare'
+  | 'root.missing'
+  | 'file.migrate';
 
 export async function logActivity(input: {
   userId: string;
