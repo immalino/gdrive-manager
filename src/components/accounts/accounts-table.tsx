@@ -155,43 +155,49 @@ export function AccountsTable() {
               <Skeleton key={i} className="h-20" />
             ))}
           </div>
-          <Card>
-            <CardContent className="px-0 pt-0">
+          <Card className="gap-0 py-0 overflow-hidden">
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Account</TableHead>
-                    <TableHead className="text-right">Used</TableHead>
-                    <TableHead className="text-right">Free</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Upload</TableHead>
-                    <TableHead>Diperbarui</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="min-w-[240px]">Account</TableHead>
+                    <TableHead className="w-28 text-right">Used</TableHead>
+                    <TableHead className="w-28 text-right">Free</TableHead>
+                    <TableHead className="w-36">Status</TableHead>
+                    <TableHead className="w-32">Upload</TableHead>
+                    <TableHead className="w-44">Diperbarui</TableHead>
+                    <TableHead className="w-24 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={`acc-skeleton-${i}`}>
                       <TableCell>
-                        <Skeleton className="h-5 w-40" />
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="size-8 rounded-full shrink-0" />
+                          <div className="space-y-1.5">
+                            <Skeleton className="h-4 w-40" />
+                            <Skeleton className="h-3 w-28" />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="ml-auto h-4 w-16" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Skeleton className="ml-auto h-4 w-16" />
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="ml-auto h-5 w-16" />
+                        <Skeleton className="h-5 w-20" />
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="ml-auto h-5 w-16" />
+                        <Skeleton className="h-5 w-16" />
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="h-5 w-24" />
+                        <Skeleton className="h-4 w-28" />
                       </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-5 w-14" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-5 w-24" />
-                      </TableCell>
-                      <TableCell>
-                        <Skeleton className="ml-auto h-5 w-12" />
+                      <TableCell className="text-right">
+                        <Skeleton className="ml-auto h-7 w-16" />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -228,18 +234,18 @@ export function AccountsTable() {
               </CardContent>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="px-0 pt-0">
+            <Card className="gap-0 py-0 overflow-hidden">
+              <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Account</TableHead>
-                      <TableHead className="text-right">Used</TableHead>
-                      <TableHead className="text-right">Free</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Upload</TableHead>
-                      <TableHead>Diperbarui</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead className="min-w-[240px]">Account</TableHead>
+                      <TableHead className="w-28 text-right">Used</TableHead>
+                      <TableHead className="w-28 text-right">Free</TableHead>
+                      <TableHead className="w-36">Status</TableHead>
+                      <TableHead className="w-32">Upload</TableHead>
+                      <TableHead className="w-44">Diperbarui</TableHead>
+                      <TableHead className="w-24 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -253,20 +259,20 @@ export function AccountsTable() {
                                 {account.email.slice(0, 1).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{account.email}</span>
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-medium truncate">{account.email}</span>
                               {account.snapshotAt && (
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
                                   Sync {formatDateTime(account.snapshotAt)}
                                 </span>
                               )}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right font-mono tabular-nums">
                           {formatBytes(account.usedBytes)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right font-mono tabular-nums">
                           {formatBytes(account.freeBytes)}
                         </TableCell>
                         <TableCell>
@@ -305,7 +311,7 @@ export function AccountsTable() {
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           {account.updatedAt ? formatDateTime(account.updatedAt) : '—'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {account.status !== 'connected' && (
                               <Button
