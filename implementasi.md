@@ -88,7 +88,7 @@ Kamu mengerjakan Sesi {N} dari implementasi.md.
 | 19 | Phase 4: Schema Migration + Setup Wizard (Shared Root) | ✅ | 2026-10-03 | Pipeline lulus (95 unit test, build, lint, format:check). Skema DB baru (shared_roots, shared_permissions, role di google_accounts) ter-generate & migrate. GoogleDriveService diperluas (createSharedRootFolder, shareFolder, revokePermission). Endpoint /api/setup/init, /status, /share/[accountId] aktif. SetupWizard UI multi-step di /dashboard/setup dengan auto-redirect guard (Next.js 16 proxy.ts + SetupGuard). OAuth callback auto-share ke akun pool baru. Live curl terverifikasi: folder root dibuat di Google Drive asli, role primary/pool ter-set, permission Google Editor terbit dan tercatat di DB, activity logs setup.init & setup.share tersimpan, guard redirect /dashboard <-> /dashboard/setup bekerja dua arah. |
 | 21 | Phase 4: Upload ke Shared Folder + Folder Creation by Primary | ✅ | 2026-10-04 | Pipeline lulus (113 unit test, build, lint, format:check). Refactor POST /api/files/upload & POST /api/files/upload/session untuk menerima parentFolderId (default ke sharedRoot.driveFolderId) dengan validasi isSubfolderOfSharedRoot; folder creation di POST /api/folders selalu menggunakan primary account; chunked uploader & upload queue meneruskan parentFolderId; UI UploadDialog beralih ke mode Automatic secara default dengan collapsible advanced options toggle untuk specific account; NewFolderButton/NewFolderDialog membuat folder di akun utama tanpa perlu memilih akun dan menerima parentFolderId; UploadDropzone & FilesDropOverlay meneruskan parentFolderId ke antrean upload. |
 | 22 | Phase 4: Refactor File Operations untuk Shared Drive | ✅ | 2026-10-04 | Pipeline lulus (123 unit test, build, lint, format:check). Operasi file (delete, download, rename, move, copy) diadaptasi untuk shared drive context dengan automatic owner resolution via drive_files; bulk delete & bulk move mendukung item lintas akun secara serempak ke folder target; search di-refactor scoped ke shared root dengan pencarian di index cache drive_files; worker indexer mengindeks folder hierarkis shared root secara BFS; filter & dropdown Account dihapus dari FilesFilters (abstracted away) dan info owner ditampilkan di tooltip file. |
-| 23 | Phase 4: UI Revamp — GDrive-like Interface | ⬜ | — | Sidebar baru (My Drive, Recent, Storage bar), file browser grid/list view, drag & drop dalam folder context, responsive layout. |
+| 23 | Phase 4: UI Revamp — GDrive-like Interface | ✅ | 2026-10-04 | Pipeline lulus (127 unit test, build, lint, format:check). Sidebar baru dengan menu My Drive, Recent, Accounts, Storage, Activity, Settings dan mini storage bar di bawah; Header disederhanakan (logo kiri, expand-on-focus search tengah, user menu kanan); Toolbar file browser dengan + New dropdown (New Folder, Upload Files), toggle Grid/List (tersinkronisasi via useSyncExternalStore), sort dropdown & toggle direction; FileGrid card view untuk folder & file dengan preview dan aksi; Halaman /dashboard/storage menampilkan StorageOverview, AccountList, dan StatsCharts; Halaman /dashboard/recent menampilkan file terbaru (7 hari) dengan dukungan grid/list view. |
 | 24 | Phase 4: Shared Drive Integrity + Storage Balancing (Adapted) | ⬜ | — | Worker verifikasi shared root integrity, auto-reshare akun baru, storage balancing & migration diadaptasi untuk shared folder model. |
 | 25 | Phase 4: Production Hardening + Phase 4 Acceptance | ⬜ | — | Distributed rate limit, worker heartbeat, audit keamanan, acceptance run-through Phase 4 lengkap. |
 
@@ -4426,14 +4426,14 @@ git add -A && git commit -m "feat: refactor file operations for shared drive con
 
 ### Langkah-langkah
 
-- [ ] **1. Sidebar revamp**
+- [x] **1. Sidebar revamp**
 
 Modifikasi `src/components/layout/sidebar.tsx`:
 - Entry list: My Drive (📁), Recent (🕐), Accounts (👥), Storage (💾), Activity (📋), Settings (⚙).
 - Storage bar di bawah: fetch `/api/storage`, render `"X GB of Y TB used"` + progress bar mini.
 - Highlight active page.
 
-- [ ] **2. Header simplify**
+- [x] **2. Header simplify**
 
 Modifikasi `src/components/layout/header.tsx`:
 - Logo + app name di kiri.
@@ -4441,7 +4441,7 @@ Modifikasi `src/components/layout/header.tsx`:
 - User avatar + menu di kanan.
 - Hapus tombol Add Account dan Refresh dari header (pindah ke halaman Accounts).
 
-- [ ] **3. File browser toolbar**
+- [x] **3. File browser toolbar**
 
 Buat `src/components/file-browser/toolbar.tsx`:
 - Tombol `+ New` (dropdown: "New Folder", "Upload Files").
@@ -4449,20 +4449,20 @@ Buat `src/components/file-browser/toolbar.tsx`:
 - Sort dropdown (Name, Modified, Size).
 - Filter toggle (jika ada filter aktif).
 
-- [ ] **4. Halaman Storage**
+- [x] **4. Halaman Storage**
 
 Buat/pindahkan ke `src/app/dashboard/storage/page.tsx`:
 - StorageOverview (total pool, used, free).
 - AccountList (per-akun storage cards).
 - StatsCharts (jika sudah ada dari Sesi 11).
 
-- [ ] **5. Halaman Recent**
+- [x] **5. Halaman Recent**
 
 Buat `src/app/dashboard/recent/page.tsx`:
 - Fetch recent files (modified dalam 7 hari terakhir).
 - Tampilkan sebagai list/grid (reuse file browser components).
 
-- [ ] **6. Grid view (opsional)**
+- [x] **6. Grid view (opsional)**
 
 Buat `src/components/file-browser/file-grid.tsx`:
 - Render file/folder sebagai card grid.
@@ -4470,14 +4470,14 @@ Buat `src/components/file-browser/file-grid.tsx`:
 - File: icon berdasarkan mime type + nama + size.
 - Toggle antara `FileGrid` dan `FilesTable`.
 
-- [ ] **7. Responsive + dark theme audit**
+- [x] **7. Responsive + dark theme audit**
 
 - Sidebar: Sheet overlay di mobile (< 768px).
 - File browser: full width tanpa sidebar di mobile.
 - Toolbar: stack vertikal di layar kecil.
 - Pastikan semua komponen baru dark theme compatible.
 
-- [ ] **8. Pipeline + commit**
+- [x] **8. Pipeline + commit**
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
@@ -4486,21 +4486,21 @@ git add -A && git commit -m "feat: UI revamp with GDrive-like interface"
 
 ### Verifikasi
 
-- [ ] Tampilan mirip Google Drive: sidebar, file browser, breadcrumb, toolbar
-- [ ] Storage bar di sidebar menunjukkan total pool capacity
-- [ ] Sidebar active state benar saat navigasi antar halaman
-- [ ] Toolbar: New Folder, Upload bekerja
-- [ ] Halaman Storage (`/dashboard/storage`) menampilkan per-akun info
-- [ ] Halaman Recent (`/dashboard/recent`) menampilkan file terbaru
-- [ ] Grid view toggle berfungsi (jika diimplementasikan)
-- [ ] Responsive: sidebar collapse di mobile, layout tidak rusak
-- [ ] Dark theme konsisten di semua halaman
-- [ ] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
+- [x] Tampilan mirip Google Drive: sidebar, file browser, breadcrumb, toolbar
+- [x] Storage bar di sidebar menunjukkan total pool capacity
+- [x] Sidebar active state benar saat navigasi antar halaman
+- [x] Toolbar: New Folder, Upload bekerja
+- [x] Halaman Storage (`/dashboard/storage`) menampilkan per-akun info
+- [x] Halaman Recent (`/dashboard/recent`) menampilkan file terbaru
+- [x] Grid view toggle berfungsi (jika diimplementasikan)
+- [x] Responsive: sidebar collapse di mobile, layout tidak rusak
+- [x] Dark theme konsisten di semua halaman
+- [x] Pipeline lulus: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
 
 ### Handoff
 
-- [ ] Commit terakhir sesi 23
-- [ ] Update baris **Sesi 23** di tracker: ✅, tanggal, catatan handoff
+- [x] Commit terakhir sesi 23
+- [x] Update baris **Sesi 23** di tracker: ✅, tanggal, catatan handoff
 
 ---
 
