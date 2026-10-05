@@ -62,6 +62,8 @@ vi.mock('@/db', () => ({
 
 const mockCreateSharedRootFolder = vi.fn();
 const mockShareFolder = vi.fn();
+const mockListPermissions = vi.fn();
+const mockGetFile = vi.fn();
 
 vi.mock('@/lib/google-drive/service', () => ({
   GoogleDriveService: {
@@ -69,6 +71,8 @@ vi.mock('@/lib/google-drive/service', () => ({
       Promise.resolve({
         createSharedRootFolder: mockCreateSharedRootFolder,
         shareFolder: mockShareFolder,
+        listPermissions: mockListPermissions,
+        getFile: mockGetFile,
       }),
     ),
   },
@@ -115,6 +119,7 @@ const poolAccount: GoogleAccount = {
 describe('shared-drive setup & permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListPermissions.mockResolvedValue([]);
   });
 
   describe('getSetupStatus', () => {
@@ -147,7 +152,7 @@ describe('shared-drive setup & permissions', () => {
   });
 
   describe('initSharedRoot', () => {
-    it('membuat root folder, simpan ke db, dan share ke pool accounts', async () => {
+    it('membuat root folder baru, simpan ke db, dan share ke pool accounts', async () => {
       mockFindFirstAccount.mockResolvedValueOnce(primaryAccount);
       mockCreateSharedRootFolder.mockResolvedValueOnce({
         id: 'drive-folder-999',
@@ -171,6 +176,51 @@ describe('shared-drive setup & permissions', () => {
       expect(mockShareFolder).toHaveBeenCalledWith('drive-folder-999', poolAccount.email, 'writer');
     });
 
+    it('menggunakan existingFolderId jika disediakan tanpa membuat folder baru', async () => {
+      mockFindFirstAccount.mockResolvedValueOnce(primaryAccount);
+      mockGetFile.mockResolvedValueOnce({
+        id: 'existing-folder-id-123',
+        name: 'Existing Shared Folder',
+        mimeType: 'application/vnd.google-apps.folder',
+      });
+      mockFindFirstSharedRoot.mockResolvedValueOnce(null);
+      mockFindManyAccounts.mockResolvedValueOnce([poolAccount]);
+      mockShareFolder.mockResolvedValueOnce('drive-perm-999');
+      mockFindFirstPermission.mockResolvedValueOnce(null);
+
+      const result = await initSharedRoot({
+        userId: 'user-1',
+        primaryAccountId: 'acc-primary',
+        existingFolderId: 'existing-folder-id-123',
+      });
+
+      expect(result.driveFolderId).toBe('existing-folder-id-123');
+      expect(mockCreateSharedRootFolder).not.toHaveBeenCalled();
+      expect(mockGetFile).toHaveBeenCalledWith('existing-folder-id-123');
+      expect(mockShareFolder).toHaveBeenCalledWith(
+        'existing-folder-id-123',
+        poolAccount.email,
+        'writer',
+      );
+    });
+
+    it('throw 400 jika existingFolderId bukan folder (misalnya file biasa)', async () => {
+      mockFindFirstAccount.mockResolvedValueOnce(primaryAccount);
+      mockGetFile.mockResolvedValueOnce({
+        id: 'file-id-123',
+        name: 'document.pdf',
+        mimeType: 'application/pdf',
+      });
+
+      await expect(
+        initSharedRoot({
+          userId: 'user-1',
+          primaryAccountId: 'acc-primary',
+          existingFolderId: 'file-id-123',
+        }),
+      ).rejects.toThrow('Item yang dipilih bukan merupakan folder Google Drive.');
+    });
+
     it('throw 404 jika primary account tidak ditemukan atau bukan milik user', async () => {
       mockFindFirstAccount.mockResolvedValueOnce(null);
 
@@ -184,7 +234,8 @@ describe('shared-drive setup & permissions', () => {
   });
 
   describe('shareRootToAccount', () => {
-    it('memanggil GoogleDriveService.shareFolder dan mencatat ke sharedPermissions', async () => {
+    it('memanggil GoogleDriveService.shareFolder dan mencatat ke sharedPermissions jika permission belum ada', async () => {
+      mockListPermissions.mockResolvedValueOnce([]);
       mockShareFolder.mockResolvedValueOnce('perm-new-id');
       mockFindFirstPermission.mockResolvedValueOnce(null);
 
@@ -192,6 +243,17 @@ describe('shared-drive setup & permissions', () => {
       expect(mockShareFolder).toHaveBeenCalledWith('folder-1', poolAccount.email, 'writer');
       expect(mockInsert).toHaveBeenCalled();
       expect(res.drivePermissionId).toBe('perm-drive-xyz');
+    });
+
+    it('menggunakan permission yang sudah ada jika pool account sudah memiliki akses', async () => {
+      mockListPermissions.mockResolvedValueOnce([
+        { id: 'perm-existing-123', emailAddress: poolAccount.email, role: 'writer', type: 'user' },
+      ]);
+      mockFindFirstPermission.mockResolvedValueOnce(null);
+
+      await shareRootToAccount('root-1', 'folder-1', primaryAccount, poolAccount);
+      expect(mockShareFolder).not.toHaveBeenCalled();
+      expect(mockInsert).toHaveBeenCalled();
     });
   });
 });

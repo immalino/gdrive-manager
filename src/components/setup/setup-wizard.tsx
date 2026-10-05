@@ -30,6 +30,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 
+import { extractFolderId } from '@/lib/google-drive/extract-folder-id';
+
 interface AccountItem {
   id: string;
   email: string;
@@ -57,7 +59,9 @@ export function SetupWizard() {
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [selectedPrimaryId, setSelectedPrimaryId] = useState<string>('');
+  const [rootMode, setRootMode] = useState<'new' | 'existing'>('new');
   const [folderName, setFolderName] = useState('GDrive Pool');
+  const [existingFolderInput, setExistingFolderInput] = useState('');
 
   // Fetch setup status
   const { data: statusData, isLoading: isLoadingStatus } = useQuery<SetupStatus>({
@@ -88,7 +92,11 @@ export function SetupWizard() {
 
   // Mutation to initialize shared root
   const initMutation = useMutation({
-    mutationFn: async (payload: { primaryAccountId: string; folderName: string }) => {
+    mutationFn: async (payload: {
+      primaryAccountId: string;
+      folderName?: string;
+      existingFolderId?: string;
+    }) => {
       const res = await fetch('/api/setup/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -100,14 +108,18 @@ export function SetupWizard() {
       }
       return res.json();
     },
-    onSuccess: () => {
-      toast.success('Folder root berhasil dibuat di Google Drive akun utama!');
+    onSuccess: (_, variables) => {
+      if (variables.existingFolderId) {
+        toast.success('Folder yang sudah ada berhasil dihubungkan sebagai root!');
+      } else {
+        toast.success('Folder root berhasil dibuat di Google Drive akun utama!');
+      }
       queryClient.invalidateQueries({ queryKey: ['setup-status'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       setStep(3);
     },
     onError: (err: Error) => {
-      toast.error(err.message || 'Terjadi kesalahan saat membuat folder root');
+      toast.error(err.message || 'Terjadi kesalahan saat mengatur folder root');
     },
   });
 
@@ -258,7 +270,7 @@ export function SetupWizard() {
             )}
             <div className="ml-auto">
               <Button disabled={!effectivePrimaryId} onClick={() => setStep(2)} className="gap-2">
-                Lanjut: Buat Folder Root
+                Lanjut: Atur Folder Root
                 <ArrowRight className="size-4" />
               </Button>
             </div>
@@ -266,20 +278,20 @@ export function SetupWizard() {
         </Card>
       )}
 
-      {/* Step 2: Create Root Folder */}
+      {/* Step 2: Configure Root Folder */}
       {effectiveStep === 2 && (
         <Card className="border-border">
           <CardHeader>
             <div className="flex items-center gap-2">
               <FolderPlus className="size-5 text-primary" />
-              <CardTitle>Buat Folder Root di Akun Utama</CardTitle>
+              <CardTitle>Atur Folder Root di Akun Utama</CardTitle>
             </div>
             <CardDescription>
-              Aplikasi akan otomatis membuat folder ini di Google Drive akun utama. Semua file pool
-              akan disimpan di dalamnya.
+              Tentukan folder Google Drive di akun utama yang akan menjadi root virtual drive untuk
+              menyimpan semua file pool.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             <div className="p-3 rounded-lg bg-muted/40 border text-xs space-y-1">
               <span className="text-muted-foreground font-medium">Akun Utama Terpilih:</span>
               <p className="font-semibold text-foreground">
@@ -287,20 +299,77 @@ export function SetupWizard() {
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="folder-name">Nama Folder Root</Label>
-              <Input
-                id="folder-name"
-                value={folderName}
-                onChange={(e) => setFolderName(e.target.value)}
-                placeholder="GDrive Pool"
-                disabled={initMutation.isPending}
-              />
-              <p className="text-xs text-muted-foreground">
-                Nama default: <span className="font-medium text-foreground">GDrive Pool</span>. Anda
-                dapat mengubahnya sesuai keinginan.
-              </p>
+            {/* Mode Selector */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-muted/50 rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setRootMode('new')}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all ${
+                  rootMode === 'new'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <FolderPlus className="size-4" />
+                Buat Folder Baru
+              </button>
+              <button
+                type="button"
+                onClick={() => setRootMode('existing')}
+                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-medium transition-all ${
+                  rootMode === 'existing'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <FolderCheck className="size-4" />
+                Gunakan Folder yang Ada
+              </button>
             </div>
+
+            {/* Mode 1: New Folder */}
+            {rootMode === 'new' && (
+              <div className="space-y-2">
+                <Label htmlFor="folder-name">Nama Folder Root Baru</Label>
+                <Input
+                  id="folder-name"
+                  value={folderName}
+                  onChange={(e) => setFolderName(e.target.value)}
+                  placeholder="GDrive Pool"
+                  disabled={initMutation.isPending}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Aplikasi akan membuat folder baru di Google Drive akun utama dengan nama ini. Nama
+                  default: <span className="font-medium text-foreground">GDrive Pool</span>.
+                </p>
+              </div>
+            )}
+
+            {/* Mode 2: Existing Folder */}
+            {rootMode === 'existing' && (
+              <div className="space-y-2">
+                <Label htmlFor="existing-folder">Folder ID atau Link Google Drive</Label>
+                <Input
+                  id="existing-folder"
+                  value={existingFolderInput}
+                  onChange={(e) => setExistingFolderInput(e.target.value)}
+                  placeholder="https://drive.google.com/drive/folders/... atau Folder ID"
+                  disabled={initMutation.isPending}
+                />
+                <div className="rounded-lg bg-muted/30 border p-3 text-xs text-muted-foreground space-y-1.5">
+                  <p className="font-medium text-foreground">Cara mendapatkan Folder ID:</p>
+                  <ol className="list-decimal list-inside space-y-0.5 pl-1">
+                    <li>Buka Google Drive di akun utama.</li>
+                    <li>Buka folder yang ingin Anda gunakan sebagai root pool.</li>
+                    <li>Salin link di URL bar browser Anda dan tempel di atas.</li>
+                  </ol>
+                  <p className="text-[11px] text-muted-foreground/80">
+                    Sistem akan otomatis mengekstrak Folder ID dan memeriksa izin akses folder
+                    tersebut.
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
           <CardFooter className="flex justify-between border-t pt-4">
             <Button variant="outline" onClick={() => setStep(1)} disabled={initMutation.isPending}>
@@ -308,26 +377,44 @@ export function SetupWizard() {
             </Button>
             <Button
               onClick={() => {
-                if (!folderName.trim()) {
-                  toast.error('Nama folder tidak boleh kosong');
-                  return;
+                if (rootMode === 'new') {
+                  if (!folderName.trim()) {
+                    toast.error('Nama folder tidak boleh kosong');
+                    return;
+                  }
+                  initMutation.mutate({
+                    primaryAccountId: effectivePrimaryId,
+                    folderName: folderName.trim(),
+                  });
+                } else {
+                  const extractedId = extractFolderId(existingFolderInput);
+                  if (!extractedId) {
+                    toast.error('Masukkan Folder ID atau URL Google Drive yang valid');
+                    return;
+                  }
+                  initMutation.mutate({
+                    primaryAccountId: effectivePrimaryId,
+                    existingFolderId: extractedId,
+                  });
                 }
-                initMutation.mutate({
-                  primaryAccountId: effectivePrimaryId,
-                  folderName: folderName.trim(),
-                });
               }}
-              disabled={initMutation.isPending || !folderName.trim()}
+              disabled={
+                initMutation.isPending ||
+                (rootMode === 'new' && !folderName.trim()) ||
+                (rootMode === 'existing' && !existingFolderInput.trim())
+              }
               className="gap-2"
             >
               {initMutation.isPending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Membuat Folder & Mengatur Sharing...
+                  {rootMode === 'new'
+                    ? 'Membuat Folder & Mengatur Sharing...'
+                    : 'Memverifikasi Folder & Mengatur Sharing...'}
                 </>
               ) : (
                 <>
-                  Buat Folder Root
+                  {rootMode === 'new' ? 'Buat Folder Root' : 'Gunakan Folder Ini'}
                   <ArrowRight className="size-4" />
                 </>
               )}

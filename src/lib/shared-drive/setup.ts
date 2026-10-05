@@ -18,6 +18,7 @@ export async function initSharedRoot(options: {
   userId: string;
   primaryAccountId: string;
   folderName?: string;
+  existingFolderId?: string;
 }): Promise<{ sharedRootId: string; driveFolderId: string }> {
   // 1. Verifikasi akun milik user
   const account = await db.query.googleAccounts.findFirst({
@@ -38,10 +39,37 @@ export async function initSharedRoot(options: {
 
   await db.update(googleAccounts).set({ role: 'primary' }).where(eq(googleAccounts.id, account.id));
 
-  // 3. Buat folder root di Google Drive akun utama
-  const folderName = options.folderName?.trim() || 'GDrive Pool';
+  // 3. Tentukan folder root (gunakan folder yang sudah ada atau buat baru)
   const service = await GoogleDriveService.forAccount(account);
-  const folder = await service.createSharedRootFolder(folderName);
+  let folder: { id: string; name: string };
+
+  if (options.existingFolderId?.trim()) {
+    const targetFolderId = options.existingFolderId.trim();
+    try {
+      const fileInfo = await service.getFile(targetFolderId);
+      if (fileInfo.mimeType !== 'application/vnd.google-apps.folder') {
+        throw new AppError(
+          'VALIDATION',
+          'Item yang dipilih bukan merupakan folder Google Drive.',
+          400,
+        );
+      }
+      folder = {
+        id: fileInfo.id,
+        name: fileInfo.name,
+      };
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw new AppError(
+        'NOT_FOUND',
+        'Folder tidak ditemukan di akun Google utama atau tidak memiliki izin akses.',
+        404,
+      );
+    }
+  } else {
+    const folderName = options.folderName?.trim() || 'GDrive Pool';
+    folder = await service.createSharedRootFolder(folderName);
+  }
 
   // 4. Simpan ke DB (sharedRoots)
   const existingRoot = await db.query.sharedRoots.findFirst({
@@ -97,6 +125,7 @@ export async function initSharedRoot(options: {
       folderId: folder.id,
       folderName: folder.name,
       poolAccountsShared: poolAccounts.length,
+      isExistingFolder: !!options.existingFolderId?.trim(),
     },
   });
 

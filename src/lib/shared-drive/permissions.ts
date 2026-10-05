@@ -10,7 +10,37 @@ export async function shareRootToAccount(
   poolAccount: GoogleAccount,
 ): Promise<SharedPermission> {
   const service = await GoogleDriveService.forAccount(primaryAccount);
-  const permId = await service.shareFolder(driveFolderId, poolAccount.email, 'writer');
+  let permId: string | undefined;
+
+  // Cek apakah permission sudah ada di Google Drive (misal folder yang sudah ada/sebelumnya sudah di-share)
+  try {
+    const existingPerms = await service.listPermissions(driveFolderId);
+    const matched = existingPerms.find(
+      (p) => p.emailAddress?.toLowerCase() === poolAccount.email.toLowerCase(),
+    );
+    if (matched) {
+      permId = matched.id;
+    }
+  } catch (err) {
+    console.warn('[shareRootToAccount] listPermissions failed, will attempt shareFolder', err);
+  }
+
+  if (!permId) {
+    try {
+      permId = await service.shareFolder(driveFolderId, poolAccount.email, 'writer');
+    } catch (shareErr) {
+      // Jika Google Drive mengembalikan error bahwa permission sudah ada
+      const existingPerms = await service.listPermissions(driveFolderId).catch(() => []);
+      const matched = existingPerms.find(
+        (p) => p.emailAddress?.toLowerCase() === poolAccount.email.toLowerCase(),
+      );
+      if (matched) {
+        permId = matched.id;
+      } else {
+        throw shareErr;
+      }
+    }
+  }
 
   // Check if a permission record already exists for this root & account
   const existing = await db.query.sharedPermissions.findFirst({

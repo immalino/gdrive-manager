@@ -92,7 +92,7 @@ Pengguna melihat satu **"My Drive"** terpadu yang menyerupai Google Drive asli t
 ### 1. Kloning Repositori
 ```bash
 git clone <repository-url>
-cd gdrive-drive
+cd gdrive-manager
 ```
 
 ### 2. Jalankan Database PostgreSQL via Docker

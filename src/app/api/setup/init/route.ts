@@ -12,6 +12,7 @@ export const POST = withAuth(async (user, req) => {
   const body = (await req.json().catch(() => null)) as {
     primaryAccountId?: string;
     folderName?: string;
+    existingFolderId?: string;
   } | null;
 
   if (!body?.primaryAccountId) {
@@ -22,6 +23,7 @@ export const POST = withAuth(async (user, req) => {
     userId: user.id,
     primaryAccountId: body.primaryAccountId,
     folderName: body.folderName,
+    existingFolderId: body.existingFolderId,
   });
 
   return ok(result, 201);
