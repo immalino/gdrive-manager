@@ -158,18 +158,44 @@ docker compose up -d worker
 
 ---
 
-## 🔐 Konfigurasi Google Cloud Console (OAuth 2.0)
+## 🔐 Konfigurasi Google Cloud Console & Status OAuth 2.0
 
+### 1. Setup Proyek & Kredensial
 1. Buka [Google Cloud Console](https://console.cloud.google.com/).
 2. Buat proyek baru atau pilih proyek yang sudah ada.
-3. Di **APIs & Services > Library**, aktifkan **Google Drive API**.
-4. Di **APIs & Services > OAuth consent screen**:
-   - Tipe: **External**.
-   - Tambahkan email pengguna uji di bagian **Test users** (karena status aplikasi masih *Testing*).
-5. Di **APIs & Services > Credentials**:
+3. Di menu **APIs & Services > Library**, cari dan aktifkan **Google Drive API**.
+4. Di menu **APIs & Services > OAuth consent screen**:
+   - Pilih User Type: **External**.
+   - Isi informasi dasar aplikasi (*App name*, *User support email*, *Developer contact email*).
+   - Tambahkan scope: `.../auth/drive`, `openid`, `email`.
+   - **Status Publikasi**: Klik **Publish App** agar status menjadi **In Production** (siap menerima otorisasi dari akun Google mana saja).
+5. Di menu **APIs & Services > Credentials**:
    - Buat kredensial **OAuth client ID** (Application type: **Web application**).
-   - Masukkan **Authorized redirect URIs**: `http://localhost:3000/api/google/callback`.
-   - Simpan, salin Client ID & Client Secret ke file `.env`.
+   - Masukkan **Authorized redirect URIs**:
+     - Development: `http://localhost:3000/api/google/callback`
+     - Production: `https://<domain-anda>/api/google/callback`
+   - Salin **Client ID** & **Client Secret** ke file `.env` (`GOOGLE_CLIENT_ID` dan `GOOGLE_CLIENT_SECRET`).
+
+---
+
+### 2. Status Publikasi: Published (Unverified App)
+
+Proyek ini telah dipublikasikan (**In Production**) di Google Cloud Console agar dapat menghubungkan akun Google mana pun tanpa batasan daftar *Test Users*. Namun, status aplikasi saat ini **Belum Diverifikasi (Unverified)** oleh tim Trust & Safety Google karena menggunakan cakupan sensitif (*Restricted Scope*: `https://www.googleapis.com/auth/drive`).
+
+> [!NOTE]
+> **Mengapa Status Belum Diverifikasi?**  
+> Verifikasi resmi Google (*Google Cloud App Verification*) memerlukan audit keamanan pihak ketiga (CASA / Cloud Application Security Assessment), kebijakan privasi publik, serta video demo jika aplikasi ditujukan untuk konsumen publik secara komersial. Untuk kebutuhan *self-hosted*, penggunaan pribadi multi-akun, maupun tim internal, verifikasi resmi **tidak diwajibkan** dan aplikasi berfungsi 100% normal.
+
+#### ⚠️ Cara Melewati Layar Peringatan "Google hasn't verified this app":
+Saat pertama kali menghubungkan akun Google (Primary atau Pool Account), Google akan menampilkan proteksi layar peringatan. Lakukan langkah berikut:
+
+1. Pada layar **"Google hasn't verified this app"** (*Google belum memverifikasi aplikasi ini*), klik tautan **Advanced** (*Lanjutan*) di bagian kiri bawah.
+2. Klik tautan **"Go to [Nama Aplikasi] (unsafe)"** (*Buka [Nama Aplikasi] (tidak aman)*).
+3. Berikan centang pada izin akses penuh Google Drive (*See, edit, create, and delete all of your Google Drive files*).
+4. Klik **Continue** (*Lanjutkan*) untuk menyelesaikan otorisasi. Token akan dienkripsi dengan AES-256-GCM dan akun siap digunakan.
+
+> [!TIP]
+> Dalam status **In Production (Unverified)**, Google memberikan kuota hingga 100 pengguna unik / akun Google terhubung. Batas ini sangat lebih dari cukup untuk skenario penggabungan kuota (*pooling*) puluhan hingga 100 akun Google Drive pribadi.
 
 ---
 
