@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
-import { googleAccounts, sharedRoots, user, type GoogleAccount } from '@/db/schema';
+import { googleAccounts, user, type GoogleAccount } from '@/db/schema';
 import { encryptSecret } from '@/lib/encryption';
 import { logActivity } from '@/lib/activity';
 
@@ -119,29 +119,8 @@ export async function syncGoogleAccountFromAuth(
     console.warn('[auth-sync] Sinkronisasi kuota gagal:', err instanceof Error ? err.message : err);
   }
 
-  // 5. Jika akun ini adalah primary, pastikan Shared Root diinisialisasi secara otomatis
-  if (targetAccount.role === 'primary') {
-    const existingRoot = await db.query.sharedRoots.findFirst({
-      where: eq(sharedRoots.userId, account.userId),
-    });
-
-    if (!existingRoot) {
-      try {
-        const { initSharedRoot } = await import('@/lib/shared-drive/setup');
-        await initSharedRoot({
-          userId: account.userId,
-          primaryAccountId: targetAccount.id,
-          folderName: 'GDrive Pool',
-        });
-        console.log(`[auth-sync] Otomatis membuat Shared Root untuk user ${account.userId}`);
-      } catch (initErr) {
-        console.error(
-          '[auth-sync] Gagal membuat Shared Root otomatis:',
-          initErr instanceof Error ? initErr.message : initErr,
-        );
-      }
-    }
-  }
+  // 5. Shared Root tidak dibuat secara otomatis di sini agar user dapat memilih
+  // apakah ingin membuat folder baru atau menggunakan folder yang sudah ada di Setup Wizard (/dashboard/setup).
 
   return targetAccount;
 }

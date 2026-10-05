@@ -105,20 +105,15 @@ export async function GET(req: NextRequest) {
     metadata: { email: row!.email, role: row!.role },
   });
 
-  // Jika user belum memiliki shared root dan akun ini adalah primary, otomatis buat shared root
+  let hasSharedRoot = false;
   try {
     const sharedRoot = await db.query.sharedRoots.findFirst({
       where: eq(sharedRoots.userId, userId),
     });
+    hasSharedRoot = !!sharedRoot;
 
-    if (!sharedRoot && row!.role === 'primary') {
-      const { initSharedRoot } = await import('@/lib/shared-drive/setup');
-      await initSharedRoot({
-        userId,
-        primaryAccountId: row!.id,
-        folderName: 'GDrive Pool',
-      });
-    } else if (sharedRoot && sharedRoot.primaryAccountId !== row!.id) {
+    // Hanya auto-share jika shared root sudah ada dan akun ini adalah akun pool
+    if (sharedRoot && sharedRoot.primaryAccountId !== row!.id) {
       const primaryAccount = await db.query.googleAccounts.findFirst({
         where: and(
           eq(googleAccounts.id, sharedRoot.primaryAccountId),
@@ -153,6 +148,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const defaultDestination = hasSharedRoot
+    ? `/dashboard/accounts?connected=${row!.id}`
+    : `/dashboard/setup`;
   const targetUrl = returnTo
     ? new URL(
         returnTo.includes('?')
@@ -160,7 +158,7 @@ export async function GET(req: NextRequest) {
           : `${returnTo}?connected=${row!.id}`,
         req.url,
       )
-    : new URL(`/dashboard/accounts?connected=${row!.id}`, req.url);
+    : new URL(defaultDestination, req.url);
 
   const res = NextResponse.redirect(targetUrl);
   res.cookies.delete('g_oauth_state');

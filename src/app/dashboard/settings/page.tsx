@@ -1,6 +1,9 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { buttonVariants } from '@/components/ui/button';
 import { getUser } from '@/lib/auth-session';
+import { getSetupStatus } from '@/lib/shared-drive/setup';
 
 const requiredEnvVars = [
   'DATABASE_URL',
@@ -17,12 +20,45 @@ export default async function SettingsPage() {
   const user = await getUser();
   if (!user) redirect('/sign-in');
 
+  const setupStatus = await getSetupStatus(user.id);
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">Konfigurasi aplikasi.</p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Folder Root Virtual Drive</CardTitle>
+          <CardDescription>
+            Folder Google Drive yang digunakan sebagai root penyimpanan pool bersama.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 text-sm">
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">Folder Root Aktif</span>
+              <p className="font-medium">{setupStatus.sharedRoot?.folderName || 'Belum diatur'}</p>
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs text-muted-foreground">Folder ID Google Drive</span>
+              <p className="font-mono text-xs truncate">
+                {setupStatus.sharedRoot?.driveFolderId || '-'}
+              </p>
+            </div>
+          </div>
+          <div className="pt-2">
+            <Link
+              href="/dashboard/setup"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Ubah atau Atur Ulang Folder Root
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

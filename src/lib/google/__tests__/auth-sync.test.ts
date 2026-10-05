@@ -78,7 +78,7 @@ describe('syncGoogleAccountFromAuth', () => {
     expect(result).toBeNull();
   });
 
-  it('menyimpan akun Google baru otomatis sebagai primary dan membuat Shared Root', async () => {
+  it('menyimpan akun Google baru otomatis sebagai primary tanpa auto-init Shared Root', async () => {
     mockFindFirstUser.mockResolvedValueOnce({
       id: 'u1',
       email: 'user@gmail.com',
@@ -89,9 +89,6 @@ describe('syncGoogleAccountFromAuth', () => {
     mockFindFirstGoogleAccount.mockResolvedValueOnce(null);
     // existingPrimary -> null
     mockFindFirstGoogleAccount.mockResolvedValueOnce(null);
-    // existingRoot -> null
-    mockFindFirstSharedRoot.mockResolvedValueOnce(null);
-    mockInitSharedRoot.mockResolvedValueOnce({ sharedRootId: 'sr-1', driveFolderId: 'f-1' });
 
     const result = await syncGoogleAccountFromAuth({
       userId: 'u1',
@@ -114,11 +111,7 @@ describe('syncGoogleAccountFromAuth', () => {
         status: 'connected',
       }),
     );
-    expect(mockInitSharedRoot).toHaveBeenCalledWith({
-      userId: 'u1',
-      primaryAccountId: 'ga-1',
-      folderName: 'GDrive Pool',
-    });
+    expect(mockInitSharedRoot).not.toHaveBeenCalled();
   });
 
   it('menyimpan akun Google kedua sebagai role pool jika akun primary sudah ada', async () => {

@@ -58,6 +58,7 @@ export function SetupWizard() {
   const queryClient = useQueryClient();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [isReconfiguring, setIsReconfiguring] = useState(false);
   const [selectedPrimaryId, setSelectedPrimaryId] = useState<string>('');
   const [rootMode, setRootMode] = useState<'new' | 'existing'>('new');
   const [folderName, setFolderName] = useState('GDrive Pool');
@@ -86,7 +87,7 @@ export function SetupWizard() {
   });
 
   const accounts = accountsData?.accounts ?? [];
-  const effectiveStep = statusData?.isSetupDone ? 4 : step;
+  const effectiveStep = isReconfiguring ? step : statusData?.isSetupDone ? 4 : step;
   const effectivePrimaryId =
     selectedPrimaryId || accounts.find((a) => a.role === 'primary')?.id || accounts[0]?.id || '';
 
@@ -116,7 +117,8 @@ export function SetupWizard() {
       }
       queryClient.invalidateQueries({ queryKey: ['setup-status'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      setStep(3);
+      setIsReconfiguring(false);
+      setStep(4);
     },
     onError: (err: Error) => {
       toast.error(err.message || 'Terjadi kesalahan saat mengatur folder root');
@@ -528,10 +530,22 @@ export function SetupWizard() {
               </div>
             </div>
           </CardContent>
-          <CardFooter className="flex justify-center border-t pt-4">
+          <CardFooter className="flex flex-col sm:flex-row gap-3 border-t pt-4">
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full sm:w-1/2 gap-2"
+              onClick={() => {
+                setIsReconfiguring(true);
+                setStep(2);
+              }}
+            >
+              <FolderPlus className="size-4" />
+              Ganti Folder Root
+            </Button>
             <Button
               size="lg"
-              className="w-full gap-2"
+              className="w-full sm:w-1/2 gap-2"
               onClick={() => {
                 router.push('/dashboard');
                 router.refresh();
