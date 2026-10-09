@@ -5,7 +5,7 @@ import { AlertCircle, ExternalLink, RefreshCw, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { AddAccountButton } from '@/components/accounts/add-account-button';
+import { AddAccountButton, AddAccountDialog } from '@/components/accounts/add-account-button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -229,8 +229,9 @@ export function AccountsTable() {
 
           {data.accounts.length === 0 ? (
             <Card>
-              <CardContent className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                Belum ada akun Google. Klik + Add Account.
+              <CardContent className="flex flex-col h-44 items-center justify-center gap-3 text-sm text-muted-foreground">
+                <p>Belum ada akun Google terhubung.</p>
+                <AddAccountDialog />
               </CardContent>
             </Card>
           ) : (

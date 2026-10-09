@@ -1,14 +1,17 @@
 import { and, eq } from 'drizzle-orm';
 import { NextResponse, type NextRequest } from 'next/server';
 import { db } from '@/db';
-import { googleAccounts, sharedRoots } from '@/db/schema';
+import { accountConnectTokens, googleAccounts, sharedRoots } from '@/db/schema';
 import { logActivity } from '@/lib/activity';
 import { encryptSecret } from '@/lib/encryption';
 import { exchangeCode, fetchUserInfo } from '@/lib/google/oauth';
 import { shareRootToAccount } from '@/lib/shared-drive/permissions';
 
-function failRedirect(req: NextRequest, error: string): NextResponse {
-  const res = NextResponse.redirect(new URL(`/dashboard/accounts?error=${error}`, req.url));
+function failRedirect(req: NextRequest, error: string, connectToken?: string): NextResponse {
+  const dest = connectToken
+    ? `/connect/${connectToken}?error=${error}`
+    : `/dashboard/accounts?error=${error}`;
+  const res = NextResponse.redirect(new URL(dest, req.url));
   res.cookies.delete('g_oauth_state');
   return res;
 }
@@ -17,21 +20,56 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
+  const googleError = url.searchParams.get('error');
+
+  let parsedState: { userId?: string; returnTo?: string; connectToken?: string } | null = null;
+  if (state) {
+    try {
+      parsedState = JSON.parse(state);
+    } catch {
+      parsedState = null;
+    }
+  }
+
+  const connectToken = parsedState?.connectToken;
+
+  if (googleError) {
+    return failRedirect(
+      req,
+      googleError === 'access_denied' ? 'access_denied' : 'google_error',
+      connectToken,
+    );
+  }
+
+  if (!code || !state || !parsedState) {
+    return failRedirect(req, 'invalid_state', connectToken);
+  }
+
   const saved = req.cookies.get('g_oauth_state')?.value;
+  let tokenRow: typeof accountConnectTokens.$inferSelect | undefined;
 
-  if (!code || !state || !saved || state !== saved) {
-    return failRedirect(req, 'invalid_state');
+  if (connectToken) {
+    const found = await db.query.accountConnectTokens.findFirst({
+      where: eq(accountConnectTokens.token, connectToken),
+    });
+    if (!found || found.status !== 'pending' || found.expiresAt.getTime() <= Date.now()) {
+      return failRedirect(req, 'invalid_state', connectToken);
+    }
+    if (saved && saved !== state) {
+      return failRedirect(req, 'invalid_state', connectToken);
+    }
+    tokenRow = found;
+  } else {
+    if (!saved || state !== saved) {
+      return failRedirect(req, 'invalid_state');
+    }
   }
 
-  let userId: string;
-  let returnTo: string | undefined;
-  try {
-    const parsed = JSON.parse(state) as { userId: string; returnTo?: string };
-    userId = parsed.userId;
-    returnTo = parsed.returnTo;
-  } catch {
-    return failRedirect(req, 'invalid_state');
+  const userId = tokenRow ? tokenRow.userId : parsedState.userId;
+  if (!userId) {
+    return failRedirect(req, 'invalid_state', connectToken);
   }
+  const returnTo = parsedState.returnTo;
 
   let tokens: Awaited<ReturnType<typeof exchangeCode>>;
   let info: Awaited<ReturnType<typeof fetchUserInfo>>;
@@ -43,7 +81,7 @@ export async function GET(req: NextRequest) {
       '[google-callback] exchange gagal:',
       error instanceof Error ? error.message : error,
     );
-    return failRedirect(req, 'exchange_failed');
+    return failRedirect(req, 'exchange_failed', connectToken);
   }
 
   const existingPrimary = await db.query.googleAccounts.findFirst({
@@ -82,7 +120,7 @@ export async function GET(req: NextRequest) {
       .from(googleAccounts)
       .where(and(eq(googleAccounts.userId, userId), eq(googleAccounts.googleAccountId, info.sub)));
     if (!existing) {
-      return failRedirect(req, 'no_refresh_token');
+      return failRedirect(req, 'no_refresh_token', connectToken);
     }
     [row] = await db
       .update(googleAccounts)
@@ -102,8 +140,24 @@ export async function GET(req: NextRequest) {
     userId,
     googleAccountId: row!.id,
     action: 'account.connect',
-    metadata: { email: row!.email, role: row!.role },
+    metadata: {
+      email: row!.email,
+      role: row!.role,
+      viaConnectToken: !!connectToken,
+    },
   });
+
+  if (tokenRow) {
+    await db
+      .update(accountConnectTokens)
+      .set({
+        status: 'completed',
+        connectedAccountId: row!.id,
+        connectedEmail: row!.email,
+        updatedAt: new Date(),
+      })
+      .where(eq(accountConnectTokens.id, tokenRow.id));
+  }
 
   let hasSharedRoot = false;
   try {
@@ -146,6 +200,14 @@ export async function GET(req: NextRequest) {
       '[callback] auto-share root ke akun baru gagal',
       shareErr instanceof Error ? shareErr.message : shareErr,
     );
+  }
+
+  if (connectToken) {
+    const res = NextResponse.redirect(
+      new URL(`/connect/success?email=${encodeURIComponent(row!.email)}`, req.url),
+    );
+    res.cookies.delete('g_oauth_state');
+    return res;
   }
 
   const defaultDestination = hasSharedRoot

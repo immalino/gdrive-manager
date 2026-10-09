@@ -1,11 +1,9 @@
-import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+'use client';
+
+import { AddAccountDialog } from '@/components/accounts/add-account-dialog';
 
 export function AddAccountButton() {
-  return (
-    <Button render={<a href="/api/google/connect" />}>
-      <Plus />
-      Add Account
-    </Button>
-  );
+  return <AddAccountDialog />;
 }
+
+export { AddAccountDialog };
