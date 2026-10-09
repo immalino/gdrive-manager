@@ -194,4 +194,3 @@ describe('Account Connect Token Endpoints', () => {
     });
   });
 });
-

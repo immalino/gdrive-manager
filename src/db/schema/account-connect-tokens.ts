@@ -28,4 +28,3 @@ export const accountConnectTokens = pgTable(
 );
 
 export type AccountConnectToken = typeof accountConnectTokens.$inferSelect;
-

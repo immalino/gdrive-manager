@@ -28,4 +28,3 @@ export async function GET(_req: Request, ctx: Ctx) {
     expiresAt: row.expiresAt.toISOString(),
   });
 }
-
